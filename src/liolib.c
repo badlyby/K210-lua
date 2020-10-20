@@ -521,6 +521,7 @@ static int io_readline (lua_State *L) {
 static int g_write (lua_State *L, FIL *f, int arg) {
   int nargs = lua_gettop(L) - arg;
   int status = 1;
+  UINT bw;
   for (; nargs--; arg++) {
     if (lua_type(L, arg) == LUA_TNUMBER) {
       /* optimization: could be done exactly as for strings */
@@ -534,7 +535,7 @@ static int g_write (lua_State *L, FIL *f, int arg) {
     else {
       size_t l;
       const char *s = luaL_checklstring(L, arg, &l);
-      status = status && (fwrite(s, sizeof(char), l, f) == l);
+      status = status && (f_write(f,s, l, &bw) == l);
     }
   }
   if (status) return 1;  /* file handle already on stack top */
@@ -634,35 +635,8 @@ static void createmeta (lua_State *L) {
   lua_pop(L, 1);  /* pop metatable */
 }
 
-
-/*
-** function to (not) close the standard files stdin, stdout, and stderr
-*/
-static int io_noclose (lua_State *L) {
-  LStream *p = tolstream(L);
-  p->closef = &io_noclose;  /* keep file opened */
-  luaL_pushfail(L);
-  lua_pushliteral(L, "cannot close standard file");
-  return 2;
-}
-
-
-static void createstdfile (lua_State *L, FIL *f, const char *k,
-                           const char *fname) {
-  LStream *p = newprefile(L);
-  p->f = *f;
-  p->closef = &io_noclose;
-  if (k != NULL) {
-    lua_pushvalue(L, -1);
-    lua_setfield(L, LUA_REGISTRYINDEX, k);  /* add file to registry */
-  }
-  lua_setfield(L, -2, fname);  /* add file to module */
-}
-
-
 LUAMOD_API int luaopen_io (lua_State *L) {
   luaL_newlib(L, iolib);  /* new module */
   createmeta(L);
   return 1;
 }
-

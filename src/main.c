@@ -12,9 +12,12 @@
 #include "lua.h"
 #include "lualib.h"
 #include "lauxlib.h"
+#include "lstate.h"
 
 LUAMOD_API int luaopen_fpioa (lua_State *L);
 LUAMOD_API int luaopen_gpio (lua_State *L);
+lua_State *L, *L1;
+static volatile int  core1_busy_flag = 0;
 
 static int sdcard_init(void)
 {
@@ -34,120 +37,87 @@ static int fs_init(void)
 {
     static FATFS sdcard_fs;
     FRESULT status;
-    DIR dj;
-    FILINFO fno;
     status = f_mount(&sdcard_fs, _T("0:"), 1);
     if(status) printf("mount sdcard:%d\n", status);
     if(status != FR_OK)
         return status;
-
-    /*printf("printf filename\n");
-    status = f_findfirst(&dj, &fno, _T("0:"), _T("*"));
-    while(status == FR_OK && fno.fname[0])
-    {
-        if(fno.fattrib & AM_DIR)
-            printf("dir:%s\n", fno.fname);
-        else
-            printf("file:%s\n", fno.fname);
-        status = f_findnext(&dj, &fno);
-    }
-    f_closedir(&dj);*/
     return 0;
 }
 
-int main1(void)
-{
-    FIL file;
-    FRESULT ret = FR_OK;
-
-    char *dir = "cannan";
-    ret = f_mkdir(dir);
-    if(ret == FR_OK)
-        printf("Mkdir %s ok\n", dir);
-    else
-        printf("Mkdir %s err [%d]\n", dir, ret);
-
-    char *path = "cannan/test.txt";
-    printf("/*******************sd read write test*******************/\n");
-    uint32_t v_ret_len = 0;
-
-    FILINFO v_fileinfo;
-    if((ret = f_stat(path, &v_fileinfo)) == FR_OK)
-    {
-        printf("%s length is %lld\n", path, v_fileinfo.fsize);
-    } else
-    {
-        printf("%s fstat err [%d]\n", path, ret);
-    }
-
-    if((ret = f_open(&file, path, FA_READ)) == FR_OK)
-    {
-        char v_buf[80] = {0};
-        ret = f_read(&file, (void *)v_buf, 64, &v_ret_len);
-        if(ret != FR_OK)
-        {
-            printf("Read %s err[%d]\n", path, ret);
-        } else
-        {
-            printf("Read :> %s %d bytes lenth\n", v_buf, v_ret_len);
-        }
-        f_close(&file);
-    }
-
-    if((ret = f_open(&file, path, FA_CREATE_ALWAYS | FA_WRITE)) != FR_OK)
-    {
-        printf("open file %s err[%d]\n", path, ret);
-        return ret;
-    } else
-    {
-        printf("Open %s ok\n", path);
-    }
-    uint8_t hello[1024];
-    uint32_t i;
-    for(i = 0; i < 1024; i++)
-    {
-        hello[i] = 'A';
-    }
-
-    ret = f_write(&file, hello, sizeof(hello), &v_ret_len);
-    if(ret != FR_OK)
-    {
-        printf("Write %s err[%d]\n", path, ret);
-    } else
-    {
-        printf("Write %d bytes to %s ok\n", v_ret_len, path);
-    }
-    f_close(&file);
-
-    while(1)
-        ;
-
-    return 0;
-}
-
-int core1_function(void *ctx)
+static int lua_current_coreid(lua_State *L)
 {
     uint64_t core = current_coreid();
-    lua_State *L = luaL_newstate();  /* create state */
-    int status;
-    printf("Core %ld Hello world\n", core);
-    //lua_register(L,"print",print);
-    luaL_openlibs(L);
-    status = luaL_dostring(L,"print \"Hello lua1!\"");
-    if(status) printf("error\n");
-    lua_close(L);
-    while(1);
+    lua_pushinteger(L, core);
+    return 1;
+}
+
+static int lua_core1_busy(lua_State *L)
+{
+    lua_pushinteger(L, core1_busy_flag);
+    return 1;
+}
+
+static int lua_core1_free(lua_State *L)
+{
+    luaE_freethread(L, L1);
+    core1_busy_flag = 0;
+    return 0;
+}
+
+int run_on_core1(void *ctx)
+{
+    int n = lua_gettop(L1);
+    lua_pcall(L1, n-1, 0, 0);
+    luaE_freethread(L, L1);
+    core1_busy_flag = 0;
+    return 0;
+}
+
+static int lua_do_core1(lua_State *L)
+{
+    int i,n,ret = 0;
+    if(core1_busy_flag) 
+    {
+        lua_pushstring(L, "core1 busy");
+        return 1;
+    }
+    L1 = lua_newthread(L);
+    //lua_getglobal(L1, "print");
+    n =lua_gettop(L);
+    lua_getglobal(L1, "on_core1");
+    lua_settop(L1,n+1);
+    for(i=1;i<n;i++)
+    lua_copy2(L,i,L1,i+1);
+    core1_busy_flag = 1;
+    ret = register_core1(run_on_core1, L);
+    lua_pushinteger(L, ret);
+    return 1;
+}
+
+static int lua_usleep(lua_State *L)
+{
+    usleep(luaL_checkinteger(L, 1));
+    return 0;
+}
+
+static int lua_msleep(lua_State *L)
+{
+    msleep(luaL_checkinteger(L, 1));
+    return 0;
+}
+
+static int lua_sleep(lua_State *L)
+{
+    sleep(luaL_checkinteger(L, 1));
+    return 0;
 }
 
 int main()
 {
-    uint64_t core = current_coreid();
     int status;
     sysctl_pll_set_freq(SYSCTL_PLL0, 800000000UL);
     plic_init();
     sysctl_enable_irq();
-    //register_core1(core1_function, NULL);
-    printf("Core %ld Hello world\n", core);
     fpioa_init();
     fpioa_set_function(28, FUNC_SPI0_D0);
     fpioa_set_function(26, FUNC_SPI0_D1);
@@ -164,11 +134,18 @@ int main()
         printf("FAT32 err\n");
         return -1;
     }
-    lua_State *L = luaL_newstate();  /* create state */
+    L = luaL_newstate();  /* create state */
     luaL_openlibs(L);
     luaL_requiref(L, "fpioa",luaopen_fpioa, 1);
     luaL_requiref(L, "gpio",luaopen_gpio, 1);
+    lua_register(L, "usleep", lua_usleep);
+    lua_register(L, "msleep", lua_msleep);
+    lua_register(L, "sleep", lua_sleep);
+    lua_register(L, "current_coreid", lua_current_coreid);
+    lua_register(L, "do_core1", lua_do_core1);
+    lua_register(L, "core1_busy", lua_core1_busy);
+    lua_register(L, "core1_free", lua_core1_free);
     status=luaL_dofile(L, "main.lua");if(status) printf("error\n");
-    lua_close(L);
     while(1);
+    lua_close(L);
 }

@@ -1,3 +1,6 @@
+function on_core1(func,...)
+    func(...)
+end
 print "Hello LUA!"
 gpio.init()
 fpioa.set_function(12, fpioa.FUNC_GPIO0)
@@ -12,3 +15,8 @@ led_g:set_pin(gpio.GPIO_PV_LOW)
 led_r = gpio.pin(fpioa.FUNC_GPIO2)
 led_r:set_drive_mode(gpio.GPIO_DM_OUTPUT)
 led_r:set_pin(gpio.GPIO_PV_LOW)
+function dual_core(arg)
+    print(arg,"core",current_coreid())
+end
+dual_core(123)
+print("run core1",do_core1(dual_core,456))
