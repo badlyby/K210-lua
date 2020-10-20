@@ -10,7 +10,7 @@
 
 #include <limits.h>
 #include <stddef.h>
-
+#include <sysctl.h>
 
 #include "lua.h"
 
@@ -239,8 +239,8 @@ typedef l_uint32 Instruction;
 ** ('lua_lock') and leaves the core ('lua_unlock')
 */
 #if !defined(lua_lock)
-#define lua_lock(L)	((void) 0)
-#define lua_unlock(L)	((void) 0)
+#define lua_lock(L)	(sysctl_disable_irq())
+#define lua_unlock(L)	(sysctl_enable_irq())
 #endif
 
 /*
