@@ -242,6 +242,19 @@ LUA_API void lua_copy (lua_State *L, int fromidx, int toidx) {
   lua_unlock(L);
 }
 
+LUA_API void lua_copy2 (lua_State *L, int fromidx, lua_State *L1, int toidx) {
+  TValue *fr, *to;
+  lua_lock(L);
+  fr = index2value(L, fromidx);
+  to = index2value(L1, toidx);
+  api_check(L, isvalid(L1, to), "invalid index");
+  setobj(L1, to, fr);
+  if (isupvalue(toidx))  /* function upvalue? */
+    luaC_barrier(L1, clCvalue(s2v(L1->ci->func)), fr);
+  /* LUA_REGISTRYINDEX does not need gc barrier
+     (collector revisits it before finishing collection) */
+  lua_unlock(L);
+}
 
 LUA_API void lua_pushvalue (lua_State *L, int idx) {
   lua_lock(L);

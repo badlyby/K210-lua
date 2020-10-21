@@ -12,11 +12,8 @@ led_g:set_pin(gpio.GPIO_PV_LOW)
 led_r = gpio.pin(fpioa.FUNC_GPIO2)
 led_r:set_drive_mode(gpio.GPIO_DM_OUTPUT)
 led_r:set_pin(gpio.GPIO_PV_LOW)
-
-print("Core ",current_coreid())
-
-function run_on_core1()
-print("Core ",current_coreid())
+function dual_core(arg)
+    print(arg,"core",current_coreid())
 end
-
-do_core1(run_on_core1)
+dual_core(123)
+print("run core1",do_core1(dual_core,456))
