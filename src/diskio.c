@@ -9,17 +9,36 @@
 
 #include "diskio.h" /* FatFs lower layer API */
 #include "sdcard.h"
+#include "w25qxx.h"
+#include <stdio.h>
 
-/* Definitions of physical drive number for each drive */
-#define M0 0 /* Example: Map MMC/SD card to physical drive 0 */
+#define FLASH_OFF_SET_ADDRESS   (8*1024*1024)
+#define FLASH_SPIFS_SIZE (w25qxx_FLASH_CHIP_SIZE - FLASH_OFF_SET_ADDRESS)
 
 /*-----------------------------------------------------------------------*/
 /* Get Drive Status                                                      */
 /*-----------------------------------------------------------------------*/
+static volatile int sdcard_ready = 0;
+static volatile int spifs_ready = 0;
+static uint8_t manuf_id = 0xFF, device_id = 0xFF;
+void flash_init(uint8_t *manuf_id, uint8_t *device_id)
+{
+    w25qxx_init_dma(3, 0);
+    w25qxx_enable_quad_mode_dma();
+    w25qxx_read_id_dma(manuf_id, device_id);
+}
 
 DSTATUS disk_status(BYTE pdrv)
 {
-    return 0;
+    switch(pdrv)
+    {
+    case 0:
+        if(spifs_ready) return 0;
+        break;
+    case 1:
+        if(sdcard_ready) return 0;
+    }
+    return STA_NOINIT;
 }
 
 /*-----------------------------------------------------------------------*/
@@ -28,8 +47,24 @@ DSTATUS disk_status(BYTE pdrv)
 
 DSTATUS disk_initialize(BYTE pdrv)
 {
-    if(sd_init() == 0)
-        return 0;
+    switch(pdrv)
+    {
+    case 0:
+        flash_init(&manuf_id, &device_id);
+        if((manuf_id != 0xFF) &&(device_id != 0xFF))
+        {
+            spifs_ready = 1;
+            return 0;
+        }
+        break;
+    case 1:
+        if(sd_init() == 0)
+        {
+            sdcard_ready = 1;
+            return 0;
+        }
+        break;
+    }
     return STA_NOINIT;
 }
 
@@ -39,8 +74,23 @@ DSTATUS disk_initialize(BYTE pdrv)
 
 DRESULT disk_read(BYTE pdrv, BYTE *buff, DWORD sector, UINT count)
 {
-    if(sd_read_sector_dma(buff, sector, count) == 0)
-        return RES_OK;
+    int ret = 0;
+    switch(pdrv)
+    {
+    case 0:
+        while(count--)
+        {
+            ret += w25qxx_read_data_dma(FLASH_OFF_SET_ADDRESS + w25qxx_FLASH_SECTOR_SIZE * sector, buff, w25qxx_FLASH_SECTOR_SIZE, W25QXX_QUAD_FAST);
+            sector++;
+            buff += w25qxx_FLASH_SECTOR_SIZE;
+            if(ret != 0)
+                return RES_ERROR;
+        }
+        break;
+    case 1:
+        if(sd_read_sector_dma(buff, sector, count) == 0)
+            return RES_OK;
+    }
     return RES_ERROR;
 }
 
@@ -50,8 +100,23 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, DWORD sector, UINT count)
 
 DRESULT disk_write(BYTE pdrv, const BYTE *buff, DWORD sector, UINT count)
 {
-    if(sd_write_sector_dma((BYTE *)buff, sector, count) == 0)
-        return RES_OK;
+    int ret = 0;
+    switch(pdrv)
+    {
+    case 0:
+        while(count--)
+        {
+            ret += w25qxx_write_data_dma(FLASH_OFF_SET_ADDRESS + w25qxx_FLASH_SECTOR_SIZE * sector, buff, w25qxx_FLASH_SECTOR_SIZE);
+            sector++;
+            buff += w25qxx_FLASH_SECTOR_SIZE;
+            if(ret != 0)
+                return RES_ERROR;
+        }
+        break;
+    case 1:
+        if(sd_write_sector_dma((BYTE *)buff, sector, count) == 0)
+            return RES_OK;
+    }
     return RES_ERROR;
 }
 
@@ -62,30 +127,60 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, DWORD sector, UINT count)
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff)
 {
     DRESULT res = RES_ERROR;
-
-    switch(cmd)
+    switch(pdrv)
     {
-        /* Make sure that no pending write process */
-        case CTRL_SYNC:
-            res = RES_OK;
-            break;
-        /* Get number of sectors on the disk (DWORD) */
-        case GET_SECTOR_COUNT:
-            *(DWORD *)buff = (cardinfo.SD_csd.DeviceSize + 1) << 10;
-            res = RES_OK;
-            break;
-        /* Get R/W sector size (WORD) */
-        case GET_SECTOR_SIZE:
-            *(WORD *)buff = cardinfo.CardBlockSize;
-            res = RES_OK;
-            break;
-        /* Get erase block size in unit of sector (DWORD) */
-        case GET_BLOCK_SIZE:
-            *(DWORD *)buff = cardinfo.CardBlockSize;
-            res = RES_OK;
-            break;
-        default:
-            res = RES_PARERR;
+    case 0:
+        switch(cmd)
+        {
+            /* Make sure that no pending write process */
+            case CTRL_SYNC:
+                res = RES_OK;
+                break;
+            /* Get number of sectors on the disk (DWORD) */
+            case GET_SECTOR_COUNT:
+                *(DWORD *)buff = FLASH_SPIFS_SIZE / w25qxx_FLASH_SECTOR_SIZE;
+                res = RES_OK;
+                break;
+            /* Get R/W sector size (WORD) */
+            case GET_SECTOR_SIZE:
+                *(WORD *)buff = w25qxx_FLASH_SECTOR_SIZE;
+                res = RES_OK;
+                break;
+            /* Get erase block size in unit of sector (DWORD) */
+            case GET_BLOCK_SIZE:
+                *(DWORD *)buff = w25qxx_FLASH_PAGE_NUM_PER_SECTOR;
+                res = RES_OK;
+                break;
+            default:
+                res = RES_PARERR;
+        }
+        break;
+    case 1:
+        switch(cmd)
+        {
+            /* Make sure that no pending write process */
+            case CTRL_SYNC:
+                res = RES_OK;
+                break;
+            /* Get number of sectors on the disk (DWORD) */
+            case GET_SECTOR_COUNT:
+                *(DWORD *)buff = (cardinfo.SD_csd.DeviceSize + 1) << 10;
+                res = RES_OK;
+                break;
+            /* Get R/W sector size (WORD) */
+            case GET_SECTOR_SIZE:
+                *(WORD *)buff = cardinfo.CardBlockSize;
+                res = RES_OK;
+                break;
+            /* Get erase block size in unit of sector (DWORD) */
+            case GET_BLOCK_SIZE:
+                *(DWORD *)buff = cardinfo.CardBlockSize;
+                res = RES_OK;
+                break;
+            default:
+                res = RES_PARERR;
+        }
+        break;
     }
     return res;
 }

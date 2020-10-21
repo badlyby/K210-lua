@@ -39,12 +39,12 @@ SD_CardInfo cardinfo;
 
 void SD_CS_HIGH(void)
 {
-    gpiohs_set_pin(7, GPIO_PV_HIGH);
+    gpiohs_set_pin(31, GPIO_PV_HIGH);
 }
 
 void SD_CS_LOW(void)
 {
-    gpiohs_set_pin(7, GPIO_PV_LOW);
+    gpiohs_set_pin(31, GPIO_PV_LOW);
 }
 
 void SD_HIGH_SPEED_ENABLE(void)
@@ -54,7 +54,7 @@ void SD_HIGH_SPEED_ENABLE(void)
 
 static void sd_lowlevel_init()
 {
-    gpiohs_set_drive_mode(7, GPIO_DM_OUTPUT);
+    gpiohs_set_drive_mode(31, GPIO_DM_OUTPUT);
     spi_set_clk_rate(SPI_DEVICE_INDEX, 200000); /*set clk rate*/
 }
 

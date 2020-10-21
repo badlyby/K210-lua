@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 #include <gpio.h>
 #include <sleep.h>
 #include <fpioa.h>
@@ -6,7 +7,7 @@
 #include <dmac.h>
 #include <ff.h>
 #include <plic.h>
-#include <sdcard.h>
+#include <diskio.h>
 #include <sysctl.h>
 #include <uarths.h>
 #include "lua.h"
@@ -18,33 +19,6 @@ LUAMOD_API int luaopen_fpioa (lua_State *L);
 LUAMOD_API int luaopen_gpio (lua_State *L);
 lua_State *L, *L1;
 static volatile int core1_busy_flag = 0;
-static volatile int sdcard_ready = 0;
-static volatile int spifs_ready = 0;
-static volatile int fatfs_ready = 0;
-static int sdcard_init(void)
-{
-    uint8_t status;
-    status = sd_init();
-    if(status) printf("sd init %d\n", status);
-    if(status != 0)
-    {
-        return status;
-    }
-    printf("CardCapacity:%ld\n", cardinfo.CardCapacity);
-    printf("CardBlockSize:%d\n", cardinfo.CardBlockSize);
-    return 0;
-}
-
-static int fs_init(void)
-{
-    static FATFS sdcard_fs;
-    FRESULT status;
-    status = f_mount(&sdcard_fs, _T("0:"), 1);
-    if(status) printf("mount sdcard:%d\n", status);
-    if(status != FR_OK)
-        return status;
-    return 0;
-}
 
 static int lua_current_coreid(lua_State *L)
 {
@@ -113,6 +87,30 @@ static int lua_sleep(lua_State *L)
     return 0;
 }
 
+static int fs_init(void)
+{
+    static FATFS sdcard_fs,spi_fs;
+    BYTE *buf;
+    FRESULT status;
+    status = f_mount(&spi_fs, _T("0:"), 1);
+    if(status == FR_NO_FILESYSTEM)
+    {
+        buf = malloc(64*1024);
+        status = f_mkfs(_T("0:"), FM_FAT, 4096, buf, 64*1024);
+        free(buf);
+        if(status == FR_OK)
+        {
+            status = f_mount(&spi_fs, _T("0:"), 1);
+        }
+    }
+    if(status) printf("mount spifs:%d\n", status);
+    status = f_mount(&sdcard_fs, _T("1:"), 1);
+    if(status) printf("mount sdcard:%d\n", status);
+    if(status != FR_OK)
+        return status;
+    return 0;
+}
+
 int main()
 {
     int status;
@@ -123,27 +121,12 @@ int main()
     fpioa_set_function(28, FUNC_SPI0_D0);
     fpioa_set_function(26, FUNC_SPI0_D1);
     fpioa_set_function(27, FUNC_SPI0_SCLK);
-    fpioa_set_function(29, FUNC_GPIOHS7);
+    fpioa_set_function(29, FUNC_GPIOHS31);
     fpioa_set_function(25, FUNC_SPI0_SS3);
     printf("CPU Freq %d\n", sysctl_cpu_get_freq());
-    if(sdcard_init())
+    if(fs_init())
     {
-        printf("SD card err\n");
-    }
-    else
-    {
-        sdcard_ready = 1;
-    }
-    if(sdcard_ready || spifs_ready)
-    {
-        if(fs_init())
-        {
-            printf("FAT32 err\n");
-        }
-        else
-        {
-            fatfs_ready = 1;
-        }
+        printf("FAT32 err\n");
     }
     L = luaL_newstate();  /* create state */
     luaL_openlibs(L);
@@ -158,15 +141,14 @@ int main()
     lua_register(L, "core1_free", lua_core1_free);
     L1 = lua_newthread(L);
     register_core1(run_on_core1, NULL);
-    if(fatfs_ready)
+    if(1)
     {
-        status = luaL_dofile(L, "main.lua");if(status) printf("error\n");
+        status = luaL_dofile(L, "1:/main.lua");if(status) printf("error\n");
     }
-    else
+    else if(1)
     {
-        printf("No file to run.\n");
+        status = luaL_dofile(L, "0:/main.lua");if(status) printf("error\n");
     }
-    
     while(1) asm volatile("wfi");
     luaE_freethread(L, L1);
     lua_close(L);
