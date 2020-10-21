@@ -16,4 +16,10 @@ function dual_core(arg)
     print(arg,"core",current_coreid())
 end
 dual_core(123)
-print("run core1",do_core1(dual_core,456))
+print("run core1")
+do_core1(dual_core,456)
+while(core1_busy()) do end
+print "core1 free"
+do_core1(dual_core,789)
+while(core1_busy()) do end
+print "Done"

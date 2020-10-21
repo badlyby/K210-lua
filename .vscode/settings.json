@@ -11,6 +11,8 @@
         "utility": "c",
         "*.tcc": "cpp",
         "cstdlib": "cpp",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "cmath": "cpp",
+        "random": "cpp"
     }
 }

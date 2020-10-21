@@ -32,7 +32,6 @@ static int lua_gpio_init (lua_State *L) {
     return 1;
 }
 
-
 static int lua_gpio_set_drive_mode(lua_State *L) {
     struct_gpio *gpio = gpio_pin(L);
     int mode;
@@ -45,6 +44,27 @@ static int lua_gpio_set_drive_mode(lua_State *L) {
     else if((gpio->func >= FUNC_GPIOHS0) && (gpio->func <= FUNC_GPIOHS31))
     {
         gpiohs_set_drive_mode(gpio->func - FUNC_GPIOHS0, mode);
+        return 0;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+static int lua_gpio_get_pin(lua_State *L) {
+    struct_gpio *gpio = gpio_pin(L);
+    int value;
+    if((gpio->func >= FUNC_GPIO0) && (gpio->func <= FUNC_GPIO7))
+    {
+        value = gpio_get_pin(gpio->func - FUNC_GPIO0);
+        lua_pushinteger(L, value);
+        return 1;
+    }
+    else if((gpio->func >= FUNC_GPIOHS0) && (gpio->func <= FUNC_GPIOHS31))
+    {
+        value = gpiohs_get_pin(gpio->func - FUNC_GPIOHS0);
+        lua_pushinteger(L, value);
         return 0;
     }
     else
@@ -72,21 +92,68 @@ static int lua_gpio_set_pin(lua_State *L) {
         return 0;
     }
 }
-/*get_pin
-gpiohs_get_pin
-lua_set_pin
-gpiohs_set_pin
 
+static int lua_gpio_set_pin_edge(lua_State *L) {
+    struct_gpio *gpio = gpio_pin(L);
+    int value;
+    value = luaL_checkinteger(L, 2);
+    if((gpio->func >= FUNC_GPIOHS0) && (gpio->func <= FUNC_GPIOHS31))
+    {
+        gpiohs_set_pin_edge(gpio->func - FUNC_GPIOHS0, value);
+        return 0;
+    }
+    else
+    {
+        return 0;
+    }
+}
+/*
+static int lua_gpio_set_irq(lua_State *L) {
+    struct_gpio *gpio = gpio_pin(L);
+    int value,func;
+    value = luaL_checkinteger(L, 2);
+    func = luaL_checkinteger(L, 3);
+    if((gpio->func >= FUNC_GPIOHS0) && (gpio->func <= FUNC_GPIOHS31))
+    {
+        gpiohs_set_irq(gpio->func - FUNC_GPIOHS0, value, gpio_callback[gpio->func - FUNC_GPIOHS0]);
+        return 0;
+    }
+    else
+    {
+        return 0;
+    }
+}
 
-gpiohs_set_pin_edge
+static int lua_gpio_irq_register(lua_State *L) {
+    struct_gpio *gpio = gpio_pin(L);
+    void *ctx;
+    int value,func;
+    value = luaL_checkinteger(L, 2);
+    func = luaL_checkinteger(L, 3);
+    ctx = luaL_checkudata(L, 4);
+    if((gpio->func >= FUNC_GPIOHS0) && (gpio->func <= FUNC_GPIOHS31))
+    {
+        gpiohs_irq_register(gpio->func - FUNC_GPIOHS0, value, gpio_callback[gpio->func - FUNC_GPIOHS0],ctx);
+        return 0;
+    }
+    else
+    {
+        return 0;
+    }
+}*/
 
-gpiohs_set_irq
-
-gpiohs_irq_register
-
-
-gpiohs_irq_unregister
-*/
+static int lua_gpio_irq_unregister(lua_State *L) {
+    struct_gpio *gpio = gpio_pin(L);
+    if((gpio->func >= FUNC_GPIOHS0) && (gpio->func <= FUNC_GPIOHS31))
+    {
+        gpiohs_irq_unregister(gpio->func - FUNC_GPIOHS0);
+        return 0;
+    }
+    else
+    {
+        return 0;
+    }
+}
 
 static int gpio_gc (lua_State *L) {
     return 0;
@@ -129,7 +196,12 @@ static const luaL_Reg gpiolib[] = {
 
 static const luaL_Reg meth[] = {
     {"set_drive_mode",lua_gpio_set_drive_mode},
+    {"get_pin", lua_gpio_get_pin},
     {"set_pin", lua_gpio_set_pin},
+    {"set_pin_edge", lua_gpio_set_pin_edge},
+    //{"set_irq", lua_gpio_set_irq},
+    //{"irq_register", lua_gpio_irq_register},
+    {"irq_unregister", lua_gpio_irq_unregister},
     {NULL, NULL}
 };
 

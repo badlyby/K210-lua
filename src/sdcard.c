@@ -150,6 +150,22 @@ static uint8_t sd_get_response(void)
     return 0xFF;
 }
 
+static uint8_t sd_get_responselow(void)
+{
+    uint8_t result;
+    uint16_t timeout = 0x00FF;
+    /*!< Check if response is got or a timeout is happen */
+    while(timeout--)
+    {
+        sd_read_data(&result, 1);
+        /*!< Right response got */
+        if(result != 0xFF)
+            return result;
+    }
+    /*!< After time out */
+    return 0xFF;
+}
+
 /*
  * @brief  Get SD card data response.
  * @param  None
@@ -373,12 +389,11 @@ uint8_t sd_init(void)
     sd_write_data(frame, 10);
     /*------------Put SD in SPI mode--------------*/
     /*!< SD initialized and set to SPI mode properly */
-
-    index = 0xFF;
+    index = 0x0F;
     while(index--)
     {
         sd_send_cmd(SD_CMD0, 0, 0x95);
-        result = sd_get_response();
+        result = sd_get_responselow();
         sd_end_cmd();
         if(result == 0x01)
             break;

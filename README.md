@@ -9,8 +9,9 @@ Sipeed MAIX Dock
 
 完成部分Completion part：
 √ sdcard
-√ fatfa
+√ fatfs
 √ fpioa
+√ dual core
 gpio: Partial
 
 

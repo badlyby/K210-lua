@@ -55,44 +55,44 @@ static int lua_current_coreid(lua_State *L)
 
 static int lua_core1_busy(lua_State *L)
 {
-    lua_pushinteger(L, core1_busy_flag);
+    lua_pushboolean(L,atomic_read(&core1_busy_flag));
     return 1;
 }
 
 static int lua_core1_free(lua_State *L)
 {
-    luaE_freethread(L, L1);
-    core1_busy_flag = 0;
+    lua_resetthread(L1);
+    atomic_set(&core1_busy_flag, 0);
     return 0;
 }
 
 int run_on_core1(void *ctx)
 {
-    int n = lua_gettop(L1);
-    lua_pcall(L1, n-1, 0, 0);
-    luaE_freethread(L, L1);
-    core1_busy_flag = 0;
+    int n;
+    while(1)
+    {
+        while(atomic_read(&core1_busy_flag) == 0) ;//asm volatile("wfi");
+        n = lua_gettop(L1);
+        lua_pcall(L1, n-1, 0, 0);
+        atomic_set(&core1_busy_flag, 0);
+    }
     return 0;
 }
 
 static int lua_do_core1(lua_State *L)
 {
-    int i,n,ret = 0;
-    if(core1_busy_flag) 
+    int i,n;
+    if(atomic_read(&core1_busy_flag)) 
     {
         lua_pushstring(L, "core1 busy");
         return 1;
     }
-    L1 = lua_newthread(L);
     n =lua_gettop(L);
-    lua_getglobal(L1, "lua_do");
-    lua_settop(L1,n+1);
-    for(i=1;i<n;i++)
-    lua_copy2(L,i,L1,i+1);
-    core1_busy_flag = 1;
-    ret = register_core1(run_on_core1, L);
-    lua_pushinteger(L, ret);
-    return 1;
+    lua_settop(L1,n);
+    for(i=1;i<=n;i++)
+        lua_copy2(L,i,L1,i);
+    atomic_set(&core1_busy_flag, 1);
+    return 0;
 }
 
 static int lua_usleep(lua_State *L)
@@ -116,7 +116,7 @@ static int lua_sleep(lua_State *L)
 int main()
 {
     int status;
-    sysctl_pll_set_freq(SYSCTL_PLL0, 800000000UL);
+    sysctl_cpu_set_freq(200000000UL);
     plic_init();
     sysctl_enable_irq();
     fpioa_init();
@@ -125,6 +125,7 @@ int main()
     fpioa_set_function(27, FUNC_SPI0_SCLK);
     fpioa_set_function(29, FUNC_GPIOHS7);
     fpioa_set_function(25, FUNC_SPI0_SS3);
+    printf("CPU Freq %d\n", sysctl_cpu_get_freq());
     if(sdcard_init())
     {
         printf("SD card err\n");
@@ -155,11 +156,18 @@ int main()
     lua_register(L, "do_core1", lua_do_core1);
     lua_register(L, "core1_busy", lua_core1_busy);
     lua_register(L, "core1_free", lua_core1_free);
-    status = luaL_dostring(L, "print(\"begin\")function lua_do(func,...) func(...) end print \"end\"");if(status) printf("error\n");
+    L1 = lua_newthread(L);
+    register_core1(run_on_core1, NULL);
     if(fatfs_ready)
     {
         status = luaL_dofile(L, "main.lua");if(status) printf("error\n");
     }
-    while(1);
+    else
+    {
+        printf("No file to run.\n");
+    }
+    
+    while(1) asm volatile("wfi");
+    luaE_freethread(L, L1);
     lua_close(L);
 }
