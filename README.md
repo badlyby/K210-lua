@@ -12,6 +12,7 @@ Sipeed MAIX Dock
 √ fatfs
 √ fpioa
 √ dual core
+√ spifs
 gpio: Partial
 
 

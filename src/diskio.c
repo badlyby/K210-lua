@@ -21,11 +21,15 @@
 static volatile int sdcard_ready = 0;
 static volatile int spifs_ready = 0;
 static uint8_t manuf_id = 0xFF, device_id = 0xFF;
-void flash_init(uint8_t *manuf_id, uint8_t *device_id)
+void flash_init(void)
 {
-    w25qxx_init_dma(3, 0);
-    w25qxx_enable_quad_mode_dma();
-    w25qxx_read_id_dma(manuf_id, device_id);
+    w25qxx_init(3, 0, 6000000);
+    w25qxx_read_id(&manuf_id, &device_id);
+    printf("manuf_id:0x%02x, device_id:0x%02x\n", manuf_id, device_id);
+    if((manuf_id == 0xEF || manuf_id == 0xC8) && (device_id == 0x17 || device_id == 0x16))
+    {
+        spifs_ready = 1;
+    }
 }
 
 DSTATUS disk_status(BYTE pdrv)
@@ -50,16 +54,12 @@ DSTATUS disk_initialize(BYTE pdrv)
     switch(pdrv)
     {
     case 0:
-        flash_init(&manuf_id, &device_id);
-        if((manuf_id != 0xFF) &&(device_id != 0xFF))
-        {
-            spifs_ready = 1;
-            return 0;
-        }
+        flash_init();
+        return 0;
         break;
     case 1:
         if(sd_init() == 0)
-        {
+        {printf("sd ready\n");
             sdcard_ready = 1;
             return 0;
         }
@@ -74,17 +74,18 @@ DSTATUS disk_initialize(BYTE pdrv)
 
 DRESULT disk_read(BYTE pdrv, BYTE *buff, DWORD sector, UINT count)
 {
-    int ret = 0;
+    w25qxx_status_t ret = 0;
     switch(pdrv)
     {
     case 0:
         while(count--)
         {
-            ret += w25qxx_read_data_dma(FLASH_OFF_SET_ADDRESS + w25qxx_FLASH_SECTOR_SIZE * sector, buff, w25qxx_FLASH_SECTOR_SIZE, W25QXX_QUAD_FAST);
+            ret += w25qxx_read_data(FLASH_OFF_SET_ADDRESS + w25qxx_FLASH_SECTOR_SIZE * sector, buff, w25qxx_FLASH_SECTOR_SIZE);
             sector++;
             buff += w25qxx_FLASH_SECTOR_SIZE;
             if(ret != 0)
                 return RES_ERROR;
+            return RES_OK;
         }
         break;
     case 1:
@@ -106,11 +107,12 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, DWORD sector, UINT count)
     case 0:
         while(count--)
         {
-            ret += w25qxx_write_data_dma(FLASH_OFF_SET_ADDRESS + w25qxx_FLASH_SECTOR_SIZE * sector, buff, w25qxx_FLASH_SECTOR_SIZE);
+            ret += w25qxx_write_data(FLASH_OFF_SET_ADDRESS + w25qxx_FLASH_SECTOR_SIZE * sector, (uint8_t *)buff, w25qxx_FLASH_SECTOR_SIZE);
             sector++;
             buff += w25qxx_FLASH_SECTOR_SIZE;
             if(ret != 0)
                 return RES_ERROR;
+            return RES_OK;
         }
         break;
     case 1:

@@ -14,6 +14,7 @@
 #include "lualib.h"
 #include "lauxlib.h"
 #include "lstate.h"
+#include "w25qxx.h"
 
 LUAMOD_API int luaopen_fpioa (lua_State *L);
 LUAMOD_API int luaopen_gpio (lua_State *L);
@@ -45,7 +46,7 @@ int run_on_core1(void *ctx)
     int n;
     while(1)
     {
-        while(atomic_read(&core1_busy_flag) == 0) ;//asm volatile("wfi");
+        while(atomic_read(&core1_busy_flag) == 0) ;
         n = lua_gettop(L1);
         lua_pcall(L1, n-1, 0, 0);
         atomic_set(&core1_busy_flag, 0);
@@ -87,6 +88,26 @@ static int lua_sleep(lua_State *L)
     return 0;
 }
 
+void make_main_lua(void)
+{
+    FIL file;
+    const char lua_str[] = "print \"hello spifs!\"";
+    uint32_t v_ret_len = 0;
+    if(f_open(&file, "0:/main.lua", FA_READ) != FR_OK)
+    {
+        printf("make main.lua\n");
+        if(f_open(&file, "0:/main.lua", FA_CREATE_ALWAYS | FA_WRITE) == FR_OK)
+        {
+            f_write(&file, lua_str, sizeof(lua_str)-1, &v_ret_len);
+            f_close(&file);
+        }
+    }
+    else
+    {
+        f_close(&file);
+    }
+}
+
 static int fs_init(void)
 {
     static FATFS sdcard_fs,spi_fs;
@@ -96,14 +117,15 @@ static int fs_init(void)
     if(status == FR_NO_FILESYSTEM)
     {
         buf = malloc(64*1024);
-        status = f_mkfs(_T("0:"), FM_FAT, 4096, buf, 64*1024);
+        status = f_mkfs(_T("0:"), FM_ANY, 0, buf, 4096);
         free(buf);
         if(status == FR_OK)
         {
             status = f_mount(&spi_fs, _T("0:"), 1);
         }
     }
-    if(status) printf("mount spifs:%d\n", status);
+    if(status) printf("mount spifs:%d %d\n", status,disk_status(0));
+    if(status == 0) printf("spifs mounted\n");
     status = f_mount(&sdcard_fs, _T("1:"), 1);
     if(status) printf("mount sdcard:%d\n", status);
     if(status != FR_OK)
@@ -113,7 +135,7 @@ static int fs_init(void)
 
 int main()
 {
-    int status;
+    FIL file;
     sysctl_cpu_set_freq(200000000UL);
     plic_init();
     sysctl_enable_irq();
@@ -128,6 +150,7 @@ int main()
     {
         printf("FAT32 err\n");
     }
+    make_main_lua();
     L = luaL_newstate();  /* create state */
     luaL_openlibs(L);
     luaL_requiref(L, "fpioa",luaopen_fpioa, 1);
@@ -141,15 +164,22 @@ int main()
     lua_register(L, "core1_free", lua_core1_free);
     L1 = lua_newthread(L);
     register_core1(run_on_core1, NULL);
-    if(1)
+    if(f_open(&file, "1:/main.lua", FA_READ) == FR_OK)
     {
-        status = luaL_dofile(L, "1:/main.lua");if(status) printf("error\n");
+        f_close(&file);
+        if(luaL_dofile(L, "1:/main.lua")) lua_error(L);
     }
-    else if(1)
+    else
     {
-        status = luaL_dofile(L, "0:/main.lua");if(status) printf("error\n");
+        if(f_open(&file, "0:/main.lua", FA_READ) == FR_OK)
+        {
+            f_close(&file);
+            if(luaL_dofile(L, "main.lua")) lua_error(L);
+        }
+        else
+            printf("No main.lua\n");
     }
-    while(1) asm volatile("wfi");
+    while(1);
     luaE_freethread(L, L1);
     lua_close(L);
 }
