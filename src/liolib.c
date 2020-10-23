@@ -644,7 +644,6 @@ static void createmeta (lua_State *L) {
 
 LUAMOD_API int luaopen_io (lua_State *L) {
   luaL_newlib(L, iolib);  /* new module */
-  createmeta(L);
   lua_pushinteger(L, FA_READ);
   lua_setfield(L, -2, "FA_READ");
   lua_pushinteger(L, FA_WRITE);
@@ -659,5 +658,6 @@ LUAMOD_API int luaopen_io (lua_State *L) {
   lua_setfield(L, -2, "FA_OPEN_ALWAYS");
   lua_pushinteger(L, FA_OPEN_APPEND);
   lua_setfield(L, -2, "FA_OPEN_APPEND");
+  createmeta(L);
   return 1;
 }

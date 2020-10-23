@@ -108,7 +108,7 @@ static int lua_gpio_set_pin_edge(lua_State *L) {
     }
 }
 
-lua_State *Lcb = NULL;
+static lua_State *Lcb = NULL;
 int gpio_callback(void *ctx)
 {
     if(Lcb != NULL)
@@ -151,6 +151,7 @@ static int lua_gpio_irq_unregister(lua_State *L) {
 }
 
 static int gpio_gc (lua_State *L) {
+    lua_gpio_irq_unregister(L);
     return 0;
 }
 

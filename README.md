@@ -14,7 +14,7 @@ Sipeed MAIX Dock
 √ dual core
 √ spifs
 √ gpio/gpiohs
-
+√ UART
 
 demo:
  main.lua

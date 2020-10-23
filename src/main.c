@@ -18,6 +18,7 @@
 
 LUAMOD_API int luaopen_fpioa (lua_State *L);
 LUAMOD_API int luaopen_gpio (lua_State *L);
+LUAMOD_API int luaopen_uart (lua_State *L) ;
 static lua_State *L, *L1;
 static volatile int core1_busy_flag = 0;
 
@@ -155,6 +156,7 @@ int main()
     luaL_openlibs(L);
     luaL_requiref(L, "fpioa",luaopen_fpioa, 1);
     luaL_requiref(L, "gpio",luaopen_gpio, 1);
+    luaL_requiref(L, "uart",luaopen_uart, 1);
     lua_register(L, "usleep", lua_usleep);
     lua_register(L, "msleep", lua_msleep);
     lua_register(L, "sleep", lua_sleep);
