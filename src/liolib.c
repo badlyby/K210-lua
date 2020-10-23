@@ -596,6 +596,13 @@ static const luaL_Reg iolib[] = {
   {"read", io_read},
   {"type", io_type},
   {"write", io_write},
+  {"FA_READ", NULL},
+  {"FA_WRITE", NULL},
+  {"FA_OPEN_EXISTING", NULL},
+  {"FA_CREATE_NEW", NULL},
+  {"FA_CREATE_ALWAYS", NULL},
+  {"FA_OPEN_ALWAYS", NULL},
+  {"FA_OPEN_APPEND", NULL},
   {NULL, NULL}
 };
 
@@ -638,5 +645,19 @@ static void createmeta (lua_State *L) {
 LUAMOD_API int luaopen_io (lua_State *L) {
   luaL_newlib(L, iolib);  /* new module */
   createmeta(L);
+  lua_pushinteger(L, FA_READ);
+  lua_setfield(L, -2, "FA_READ");
+  lua_pushinteger(L, FA_WRITE);
+  lua_setfield(L, -2, "FA_WRITE");
+  lua_pushinteger(L, FA_OPEN_EXISTING);
+  lua_setfield(L, -2, "FA_OPEN_EXISTING");
+  lua_pushinteger(L, FA_CREATE_NEW);
+  lua_setfield(L, -2, "FA_CREATE_NEW");
+  lua_pushinteger(L, FA_CREATE_ALWAYS);
+  lua_setfield(L, -2, "FA_CREATE_ALWAYS");
+  lua_pushinteger(L, FA_OPEN_ALWAYS);
+  lua_setfield(L, -2, "FA_OPEN_ALWAYS");
+  lua_pushinteger(L, FA_OPEN_APPEND);
+  lua_setfield(L, -2, "FA_OPEN_APPEND");
   return 1;
 }

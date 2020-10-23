@@ -18,7 +18,7 @@
 
 LUAMOD_API int luaopen_fpioa (lua_State *L);
 LUAMOD_API int luaopen_gpio (lua_State *L);
-lua_State *L, *L1;
+static lua_State *L, *L1;
 static volatile int core1_busy_flag = 0;
 
 static int lua_current_coreid(lua_State *L)
@@ -174,7 +174,7 @@ int main()
         if(f_open(&file, "0:/main.lua", FA_READ) == FR_OK)
         {
             f_close(&file);
-            if(luaL_dofile(L, "main.lua")) lua_error(L);
+            if(luaL_dofile(L, "0:/main.lua")) lua_error(L);
         }
         else
             printf("No main.lua\n");

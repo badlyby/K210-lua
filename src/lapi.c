@@ -256,6 +256,28 @@ LUA_API void lua_copy2 (lua_State *L, int fromidx, lua_State *L1, int toidx) {
   lua_unlock(L);
 }
 
+LUA_API lua_Integer lua_tofunction(lua_State *L, int idx)
+{
+  lua_Integer res = 0;
+  const TValue *o = index2value(L, idx);
+  res = o->value_.i;
+  return res;
+}
+
+LUA_API void lua_pushfunction (lua_State *L, lua_Integer func) {
+  lua_lock(L);
+  TValue *to,fr;
+  api_incr_top(L);
+  int n = lua_gettop(L);
+  fr.tt_ = ctb(LUA_VLCL);
+  fr.value_.i = func;
+  to = index2value(L, n);
+  setobj(L, to, &fr);
+  if (isupvalue(n))
+    luaC_barrier(L, clCvalue(s2v(L->ci->func)), index2value(L,n));
+  lua_unlock(L);
+}
+
 LUA_API void lua_pushvalue (lua_State *L, int idx) {
   lua_lock(L);
   setobj2s(L, L->top, index2value(L, idx));

@@ -107,15 +107,28 @@ static int lua_gpio_set_pin_edge(lua_State *L) {
         return 0;
     }
 }
-/*
+
+lua_State *Lcb = NULL;
+int gpio_callback(void *ctx)
+{
+    if(Lcb != NULL)
+    {
+        lua_settop(Lcb,0);
+        lua_pushfunction(Lcb, (lua_Integer)ctx);
+        if(lua_pcall(Lcb, 0, 0, 0)) lua_error(Lcb);
+    }
+    return 0;
+}
+
 static int lua_gpio_set_irq(lua_State *L) {
     struct_gpio *gpio = gpio_pin(L);
-    int value,func;
+    lua_Integer value,func;
     value = luaL_checkinteger(L, 2);
-    func = luaL_checkinteger(L, 3);
+    func = lua_tofunction(L, 3);
+    Lcb = L;
     if((gpio->func >= FUNC_GPIOHS0) && (gpio->func <= FUNC_GPIOHS31))
     {
-        gpiohs_set_irq(gpio->func - FUNC_GPIOHS0, value, gpio_callback[gpio->func - FUNC_GPIOHS0]);
+        gpiohs_irq_register(gpio->func - FUNC_GPIOHS0, value, gpio_callback, (void *)func);
         return 0;
     }
     else
@@ -123,24 +136,6 @@ static int lua_gpio_set_irq(lua_State *L) {
         return 0;
     }
 }
-
-static int lua_gpio_irq_register(lua_State *L) {
-    struct_gpio *gpio = gpio_pin(L);
-    void *ctx;
-    int value,func;
-    value = luaL_checkinteger(L, 2);
-    func = luaL_checkinteger(L, 3);
-    ctx = luaL_checkudata(L, 4);
-    if((gpio->func >= FUNC_GPIOHS0) && (gpio->func <= FUNC_GPIOHS31))
-    {
-        gpiohs_irq_register(gpio->func - FUNC_GPIOHS0, value, gpio_callback[gpio->func - FUNC_GPIOHS0],ctx);
-        return 0;
-    }
-    else
-    {
-        return 0;
-    }
-}*/
 
 static int lua_gpio_irq_unregister(lua_State *L) {
     struct_gpio *gpio = gpio_pin(L);
@@ -199,8 +194,7 @@ static const luaL_Reg meth[] = {
     {"get_pin", lua_gpio_get_pin},
     {"set_pin", lua_gpio_set_pin},
     {"set_pin_edge", lua_gpio_set_pin_edge},
-    //{"set_irq", lua_gpio_set_irq},
-    //{"irq_register", lua_gpio_irq_register},
+    {"set_irq", lua_gpio_set_irq},
     {"irq_unregister", lua_gpio_irq_unregister},
     {NULL, NULL}
 };

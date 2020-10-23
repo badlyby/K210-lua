@@ -13,7 +13,7 @@ Sipeed MAIX Dock
 √ fpioa
 √ dual core
 √ spifs
-gpio: Partial
+√ gpio/gpiohs
 
 
 demo:
