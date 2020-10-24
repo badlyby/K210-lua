@@ -18,7 +18,8 @@
 
 LUAMOD_API int luaopen_fpioa (lua_State *L);
 LUAMOD_API int luaopen_gpio (lua_State *L);
-LUAMOD_API int luaopen_uart (lua_State *L) ;
+LUAMOD_API int luaopen_uart (lua_State *L);
+void into_REPL(lua_State *L);
 static lua_State *L, *L1;
 static volatile int core1_busy_flag = 0;
 
@@ -134,6 +135,12 @@ static int fs_init(void)
     return 0;
 }
 
+static int lua_sys_reset(lua_State *L)
+{
+    sysctl->soft_reset.soft_reset = 1;
+    return 0;
+}
+
 int main()
 {
     FIL file;
@@ -160,6 +167,7 @@ int main()
     lua_register(L, "usleep", lua_usleep);
     lua_register(L, "msleep", lua_msleep);
     lua_register(L, "sleep", lua_sleep);
+    lua_register(L, "sys_reset", lua_sys_reset);
     lua_register(L, "current_coreid", lua_current_coreid);
     lua_register(L, "do_core1", lua_do_core1);
     lua_register(L, "core1_busy", lua_core1_busy);
@@ -181,6 +189,7 @@ int main()
         else
             printf("No main.lua\n");
     }
+    into_REPL(L);
     while(1);
     luaE_freethread(L, L1);
     lua_close(L);
