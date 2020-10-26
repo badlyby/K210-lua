@@ -50,7 +50,9 @@ static void lstop (lua_State *L, lua_Debug *ar) {
 
 int signal_action(void *ctx)
 {
-  if(fgetc(stdin) == 0x03)
+  char ch;
+  uart_receive_data(s_uart_debug_channel, &ch, 1);
+  if(ch == 0x03)
   {
     int flag = LUA_MASKCALL | LUA_MASKRET | LUA_MASKLINE | LUA_MASKCOUNT;
     uart_irq_unregister(s_uart_debug_channel, UART_RECEIVE);
