@@ -19,7 +19,7 @@
 LUAMOD_API int luaopen_fpioa (lua_State *L);
 LUAMOD_API int luaopen_gpio (lua_State *L);
 LUAMOD_API int luaopen_uart (lua_State *L);
-void into_REPL(lua_State *L);
+void into_main(lua_State *L);
 static lua_State *L, *L1;
 static volatile int core1_busy_flag = 0;
 
@@ -143,7 +143,6 @@ static int lua_sys_reset(lua_State *L)
 
 int main()
 {
-    FIL file;
     sysctl_cpu_set_freq(200000000UL);
     plic_init();
     sysctl_enable_irq();
@@ -174,22 +173,7 @@ int main()
     lua_register(L, "core1_free", lua_core1_free);
     L1 = lua_newthread(L);
     register_core1(run_on_core1, NULL);
-    if(f_open(&file, "1:/main.lua", FA_READ) == FR_OK)
-    {
-        f_close(&file);
-        if(luaL_dofile(L, "1:/main.lua")) lua_error(L);
-    }
-    else
-    {
-        if(f_open(&file, "0:/main.lua", FA_READ) == FR_OK)
-        {
-            f_close(&file);
-            if(luaL_dofile(L, "0:/main.lua")) lua_error(L);
-        }
-        else
-            printf("No main.lua\n");
-    }
-    into_REPL(L);
+    into_main(L);
     while(1);
     luaE_freethread(L, L1);
     lua_close(L);

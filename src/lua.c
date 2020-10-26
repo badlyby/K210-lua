@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include <signal.h>
+#include <uart.h>
 
 #include "lua.h"
 
@@ -36,6 +37,7 @@ static lua_State *globalL = NULL;
 
 static const char *progname = LUA_PROGNAME;
 
+static uart_device_number_t s_uart_debug_channel = UART_DEVICE_3;
 
 /*
 ** Hook set by signal function to stop the interpreter.
@@ -46,6 +48,28 @@ static void lstop (lua_State *L, lua_Debug *ar) {
   luaL_error(L, "interrupted!");
 }
 
+int signal_action(void *ctx)
+{
+  if(fgetc(stdin) == 0x03)
+  {
+    int flag = LUA_MASKCALL | LUA_MASKRET | LUA_MASKLINE | LUA_MASKCOUNT;
+    uart_irq_unregister(s_uart_debug_channel, UART_RECEIVE);
+    lua_sethook(globalL, lstop, flag, 1);
+  }
+  return 0;
+}
+
+void signal_register(void)
+{
+  printf("signal_register\n");
+  uart_irq_register(s_uart_debug_channel, UART_RECEIVE, signal_action, NULL, 1);
+}
+
+void signal_unregister(void)
+{
+  printf("signal_unregister\n");
+  uart_irq_unregister(s_uart_debug_channel, UART_RECEIVE);
+}
 
 /*
 ** Function to be called at a C signal. Because a C signal cannot
@@ -53,11 +77,11 @@ static void lstop (lua_State *L, lua_Debug *ar) {
 ** this function only sets a hook that, when called, will stop the
 ** interpreter.
 */
-static void laction (int i) {
-  int flag = LUA_MASKCALL | LUA_MASKRET | LUA_MASKLINE | LUA_MASKCOUNT;
-  signal(i, SIG_DFL); /* if another SIGINT happens, terminate process */
-  lua_sethook(globalL, lstop, flag, 1);
-}
+// static void laction (int i) {
+//   int flag = LUA_MASKCALL | LUA_MASKRET | LUA_MASKLINE | LUA_MASKCOUNT;
+//   signal(i, SIG_DFL); /* if another SIGINT happens, terminate process */
+//   lua_sethook(globalL, lstop, flag, 1);
+// }
 
 /*
 ** Prints an error message, adding the program name in front of it
@@ -112,13 +136,22 @@ static int docall (lua_State *L, int narg, int nres) {
   lua_pushcfunction(L, msghandler);  /* push message handler */
   lua_insert(L, base);  /* put it under function and args */
   globalL = L;  /* to be available to 'laction' */
-  signal(SIGINT, laction);  /* set C-signal handler */
+  signal_register();//signal(SIGINT, laction);  /* set C-signal handler */
   status = lua_pcall(L, narg, nres, base);
-  signal(SIGINT, SIG_DFL); /* reset C-signal handler */
+  signal_unregister();//signal(SIGINT, SIG_DFL); /* reset C-signal handler */
   lua_remove(L, base);  /* remove message handler from the stack */
   return status;
 }
 
+static int dochunk (lua_State *L, int status) {
+  if (status == LUA_OK) status = docall(L, 0, 0);
+  return report(L, status);
+}
+
+
+static int dofile (lua_State *L, const char *name) {
+  return dochunk(L, luaL_loadfile(L, name));
+}
 
 static void print_version (void) {
   lua_writestring(LUA_COPYRIGHT, strlen(LUA_COPYRIGHT));
@@ -358,8 +391,23 @@ static void doREPL (lua_State *L) {
   progname = oldprogname;
 }
 
-void into_REPL(lua_State *L)
+void into_main(lua_State *L)
 {
-  print_version();
+  FIL file;
+  if(f_open(&file, "1:/main.lua", FA_READ) == FR_OK)
+  {
+    f_close(&file);
+    dofile(L, "1:/main.lua");
+  }
+  else
+  {
+    if(f_open(&file, "0:/main.lua", FA_READ) == FR_OK)
+    {
+      f_close(&file);
+      dofile(L, "0:/main.lua");
+    }
+    else
+      print_version();
+  }
   doREPL(L);
 }

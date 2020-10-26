@@ -34,12 +34,4 @@ sw:set_drive_mode(gpio.GPIO_DM_INPUT_PULL_UP)
 sw:set_pin_edge(gpio.GPIO_PE_FALLING)
 sw:set_irq(1,key_down)
 
-u3=uart.init(3)
-
-function u3_callback()
-	print(u3:receive_data())
-end
-
-u3:irq_register(uart.UART_RECEIVE, u3_callback, 1)
-
 while(1) do sleep(1) end
