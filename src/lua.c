@@ -267,12 +267,27 @@ static int pushline (lua_State *L, int firstline) {
   char buffer[LUA_MAXINPUT];
   char *b = buffer;
   size_t l;
+  int i,j;
   const char *prmt = get_prompt(L, firstline);
   int readstatus = lua_readline(L, b, prmt);
   if (readstatus == 0)
     return 0;  /* no input (prompt will be popped by caller) */
   lua_pop(L, 1);  /* remove prompt */
   l = strlen(b);
+  j=0;
+  for(i=0;i<l;i++)
+  {
+    if(j)
+    {
+      if((i-j)<0) j=i;
+      b[i-j] = b[i];
+    }
+    if(b[i] == 0x08)
+    {
+      j+=2;
+    }
+  }b[l-j]=0;
+  l-=j;
   if (l > 0 && b[l-1] == '\n')  /* line ends with newline? */
     b[--l] = '\0';  /* remove it */
   if (firstline && b[0] == '=')  /* for compatibility with 5.2, ... */
