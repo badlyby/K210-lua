@@ -41,3 +41,5 @@ function u3_callback()
 end
 
 u3:irq_register(uart.UART_RECEIVE, u3_callback, 1)
+
+while(1) do sleep(1) end

@@ -4,12 +4,16 @@
 #include <fpioa.h>
 #include <gpio.h>
 #include <gpiohs.h>
+#include "lstate.h"
 
 #define LUA_GPIOHANDLE	"GPIOHANDLE"
 
 typedef struct {
     int func;
 } struct_gpio;
+
+static uint32_t GPIO_STATE_FLAG = 0;
+static lua_State *Lcb = NULL;
 
 #define gpio_pin(L)	((struct_gpio *)luaL_checkudata(L, 1, LUA_GPIOHANDLE))
 
@@ -108,7 +112,6 @@ static int lua_gpio_set_pin_edge(lua_State *L) {
     }
 }
 
-static lua_State *Lcb = NULL;
 int gpio_callback(void *ctx)
 {
     if(Lcb != NULL)
@@ -125,9 +128,13 @@ static int lua_gpio_set_irq(lua_State *L) {
     lua_Integer value,func;
     value = luaL_checkinteger(L, 2);
     func = lua_tofunction(L, 3);
-    Lcb = L;
     if((gpio->func >= FUNC_GPIOHS0) && (gpio->func <= FUNC_GPIOHS31))
     {
+        if(GPIO_STATE_FLAG == 0)
+        {
+            GPIO_STATE_FLAG |= (1<<(gpio->func - FUNC_GPIOHS0));
+            Lcb = lua_newthread(L);
+        }
         gpiohs_irq_register(gpio->func - FUNC_GPIOHS0, value, gpio_callback, (void *)func);
         return 0;
     }
@@ -142,6 +149,11 @@ static int lua_gpio_irq_unregister(lua_State *L) {
     if((gpio->func >= FUNC_GPIOHS0) && (gpio->func <= FUNC_GPIOHS31))
     {
         gpiohs_irq_unregister(gpio->func - FUNC_GPIOHS0);
+        GPIO_STATE_FLAG &= ~(1<<(gpio->func - FUNC_GPIOHS0));
+        if(GPIO_STATE_FLAG == 0)
+        {
+            luaE_freethread(L,Lcb);
+        }
         return 0;
     }
     else

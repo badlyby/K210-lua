@@ -3,8 +3,11 @@
 #include "lualib.h"
 #include <fpioa.h>
 #include <uart.h>
+#include "lstate.h"
 
 #define LUA_UARTHANDLE	"UARTHANDLE"
+static uint32_t UART_STATE_FLAG = 0;
+static lua_State *Lcb = NULL;
 
 typedef struct {
     int num;
@@ -57,7 +60,6 @@ static int lua_uart_recv_fifo(lua_State *L) {
     return 0;
 }
 
-static lua_State *Lcb = NULL;
 int uart_callback(void *ctx)
 {
     if(Lcb != NULL)
@@ -75,7 +77,11 @@ static int lua_uart_irq_register(lua_State *L) {
     mode = luaL_checkinteger(L, 2);
     ctx = lua_tofunction(L, 3);
     priority = luaL_checkinteger(L, 4);
-    Lcb = L;
+    if(UART_STATE_FLAG == 0)
+    {
+        UART_STATE_FLAG |= (1<<uart->num);
+        Lcb = lua_newthread(L);
+    }
     uart_irq_register(uart->num, mode, uart_callback, (void *)ctx, priority);
     return 0;
 }
@@ -85,6 +91,11 @@ static int lua_uart_irq_unregister(lua_State *L) {
     int mode;
     mode = luaL_checkinteger(L, 2);
     uart_irq_unregister(uart->num, mode);
+    UART_STATE_FLAG &= ~(1<<uart->num);
+    if(UART_STATE_FLAG == 0)
+    {
+        luaE_freethread(L,Lcb);
+    }
     return 0;
 }
 
