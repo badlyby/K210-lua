@@ -20,7 +20,7 @@
 
 #include "lauxlib.h"
 #include "lualib.h"
-
+#include <uart.h>
 
 #if !defined(LUA_PROGNAME)
 #define LUA_PROGNAME		"lua"
@@ -38,6 +38,7 @@ static lua_State *globalL = NULL;
 static const char *progname = LUA_PROGNAME;
 
 static uart_device_number_t s_uart_debug_channel = UART_DEVICE_3;
+volatile uart_t *debug_port = (volatile uart_t *)UART3_BASE_ADDR;
 
 /*
 ** Hook set by signal function to stop the interpreter.
@@ -77,7 +78,7 @@ void signal_unregister(void)
 */
 static void l_message (const char *pname, const char *msg) {
   if (pname) lua_writestringerror("%s: ", pname);
-  lua_writestringerror("%s\n", msg);
+  lua_writestringerror("%s\r\n", msg);
 }
 
 
@@ -241,6 +242,45 @@ static const char *get_prompt (lua_State *L, int firstline) {
 #define EOFMARK		"<eof>"
 #define marklen		(sizeof(EOFMARK)/sizeof(char) - 1)
 
+int l_read_lines(lua_State *L, char *b, const char *p)
+{
+  char ch = 0;
+  static char lch = 0;
+  int line_count = 0;
+  fputs(p, stdout);
+  fflush(stdout);
+  while(1)
+  {
+    if(debug_port->LSR & 1)
+    {
+        ch = (char)(debug_port->RBR & 0xff);
+        lch = ch;
+        if(ch == 0x03)
+          break;
+        b[line_count] = ch;
+        line_count++;
+        if(line_count >= (LUA_MAXINPUT-1))
+          break;
+        if(ch == '\r')
+          break;
+        if(ch == '\n')
+          break;
+        while(debug_port->LSR & (1u << 5))
+          continue;
+        debug_port->THR = ch;
+    }
+  }
+  if((line_count == 1) && (ch == '\n') && (lch == '\r'))
+    return 0;
+  while(debug_port->LSR & (1u << 5))
+    continue;
+  debug_port->THR = '\r';
+  while(debug_port->LSR & (1u << 5))
+    continue;
+  debug_port->THR = '\n';
+  b[line_count] = 0;
+  return line_count;
+}
 
 /*
 ** Check whether 'status' signals a syntax error and the error
@@ -269,7 +309,7 @@ static int pushline (lua_State *L, int firstline) {
   size_t l;
   int i,j;
   const char *prmt = get_prompt(L, firstline);
-  int readstatus = lua_readline(L, b, prmt);
+  int readstatus = l_read_lines(L, b, prmt);//lua_readline(L, b, prmt);
   if (readstatus == 0)
     return 0;  /* no input (prompt will be popped by caller) */
   lua_pop(L, 1);  /* remove prompt */
@@ -330,7 +370,7 @@ static int multiline (lua_State *L) {
       lua_saveline(L, line);  /* keep history */
       return status;  /* cannot or should not try to add continuation line */
     }
-    lua_pushliteral(L, "\n");  /* add newline... */
+    lua_pushliteral(L, "\r\n");  /* add newline... */
     lua_insert(L, -2);  /* ...between the two lines */
     lua_concat(L, 3);  /* join them */
   }

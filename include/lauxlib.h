@@ -237,7 +237,7 @@ typedef struct luaL_Stream {
 
 /* print a newline and flush the output */
 #if !defined(lua_writeline)
-#define lua_writeline()        (lua_writestring("\n", 1), fflush(stdout))
+#define lua_writeline()        (lua_writestring("\r\n", 2), fflush(stdout))
 #endif
 
 /* print an error message */
