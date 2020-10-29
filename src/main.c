@@ -15,10 +15,34 @@
 #include "lauxlib.h"
 #include "lstate.h"
 #include "w25qxx.h"
+#include "SPE_NL.h"
+#include "wzl-fifo.h"
+#include <uart.h>
+
+#define SPE_CMD_NOP 0
+#define SPE_CMD_OFW 1 //open file for write
+#define SPE_CMD_OFR 2 //open file for read
+#define SPE_CMD_WF  3 //write file
+#define SPE_CMD_RF  4 //read file
+#define SPE_CMD_CF  5 //close file
+#define SPE_CMD_DF  6 //do file
+#define SPE_RETURN_U8   0x80
+#define SPE_RETURN_U16  0x81
+#define SPE_RETURN_U32  0x82
+#define SPE_RETURN_U64  0x83
+#define SPE_ERROR   0xFE
+#define SPE_CMD_EXIT 0xFF //exit spe mode
+
+static uint8_t spe_retbuf[9000];
+WZL_FIFO spe_fifo;
+uint8_t spe_fifo_buf[9000];
+
+volatile int running_spe = 0;
 
 LUAMOD_API int luaopen_fpioa (lua_State *L);
 LUAMOD_API int luaopen_gpio (lua_State *L);
 LUAMOD_API int luaopen_uart (lua_State *L);
+int dofile (lua_State *L, const char *name);
 void into_main(lua_State *L);
 static lua_State *L, *L1;
 static volatile int core1_busy_flag = 0;
@@ -141,8 +165,109 @@ static int lua_sys_reset(lua_State *L)
     return 0;
 }
 
+int spe_get_bytes(void *ctx)
+{
+    uint8_t buf[14],i,len;
+    len = uart_receive_data(UART_DEVICE_3, (char *)buf, 14);
+    for(i=0;i<len;i++)
+        FIFO_push(&spe_fifo, buf[i]);
+    return 0;
+}
+
+static int lua_into_spe(lua_State *L)
+{
+    running_spe = 1;
+    int i,len;
+    uint8_t ch = 0;
+    uart_irq_register(UART_DEVICE_3, UART_RECEIVE, spe_get_bytes, NULL, 1);
+    while(running_spe)
+    {
+        len = FIFO_getSize(&spe_fifo);
+        for(i=0;i<len;i++)
+        {
+            FIFO_get(&spe_fifo, &ch);
+            SPE_Receive_Byte(ch);
+        }
+    }
+    return 0;
+}
+
+FIL spe_file;
+void SPE_CallBack(uint8_t *data, uint32_t length)
+{
+    uint8_t cmd = 0;
+    UINT v_ret_len;
+    if(length)
+    {
+        cmd = data[0];
+        switch(cmd)
+        {
+        case SPE_CMD_OFW:
+            if((length >= 2) && (length < 9000))
+            {
+                data[length] = 0;
+                spe_retbuf[0] = SPE_RETURN_U8;
+                spe_retbuf[1] = f_open(&spe_file, (const char *)(data+1), FA_WRITE | FA_CREATE_ALWAYS);
+                SPE_Send_Packet(spe_retbuf, 2);
+            }
+            break;
+        case SPE_CMD_OFR:
+            if((length >= 2) && (length < 9000))
+            {
+                data[length] = 0;
+                spe_retbuf[0] = SPE_RETURN_U8;
+                spe_retbuf[1] = f_open(&spe_file, (const char *)(data+1), FA_READ);
+                SPE_Send_Packet(spe_retbuf, 2);
+            }
+            break;
+        case SPE_CMD_WF:
+            if(length > 1)
+            {
+                spe_retbuf[0] = SPE_RETURN_U8;
+                spe_retbuf[1] = f_write(&spe_file, data+1, length-1, &v_ret_len);
+                SPE_Send_Packet(spe_retbuf, 2);
+            }
+            break;
+        case SPE_CMD_RF:
+            spe_retbuf[0] = f_read(&spe_file, spe_retbuf+1, 8192, &v_ret_len);
+            SPE_Send_Packet(spe_retbuf, v_ret_len+1);
+            break;
+        case SPE_CMD_CF:
+            spe_retbuf[0] = SPE_RETURN_U8;
+            spe_retbuf[1] = f_close(&spe_file);
+            SPE_Send_Packet(spe_retbuf, 2);
+            break;
+        case SPE_CMD_DF:
+            if((length >= 2) && (length < 9000))
+            {
+                data[length] = 0;
+                uart_irq_unregister(UART_DEVICE_3, UART_RECEIVE);
+                running_spe = 0;
+                dofile(L, (const char *)(data+1));
+            }
+            break;
+        case SPE_CMD_EXIT:
+            uart_irq_unregister(UART_DEVICE_3, UART_RECEIVE);
+            running_spe = 0;
+            break;
+        }
+    }
+}
+
+void SendBytes(uint8_t *bytes, uint32_t length)
+{
+    fwrite(bytes, 1, length, stdout);
+}
+
+void SPE_CRCError(uint16_t s,uint16_t d)
+{
+    spe_retbuf[0] = SPE_ERROR;
+    SPE_Send_Packet(spe_retbuf, 1);
+}
+
 int main()
 {
+    FIFO_Init(&spe_fifo, spe_fifo_buf);
     sysctl_cpu_set_freq(200000000UL);
     plic_init();
     sysctl_enable_irq();
@@ -171,6 +296,7 @@ int main()
     lua_register(L, "do_core1", lua_do_core1);
     lua_register(L, "core1_busy", lua_core1_busy);
     lua_register(L, "core1_free", lua_core1_free);
+    lua_register(L, "into_spe", lua_into_spe);
     L1 = lua_newthread(L);
     register_core1(run_on_core1, NULL);
     into_main(L);

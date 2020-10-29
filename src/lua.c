@@ -136,7 +136,7 @@ static int dochunk (lua_State *L, int status) {
   return report(L, status);
 }
 
-static int dofile (lua_State *L, const char *name) {
+int dofile (lua_State *L, const char *name) {
   return dochunk(L, luaL_loadfile(L, name));
 }
 
