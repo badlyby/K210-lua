@@ -62,6 +62,25 @@ int signal_action(void *ctx)
   return 0;
 }
 
+/*void uart_irq_register(uart_device_number_t channel, uart_interrupt_mode_t interrupt_mode, plic_irq_callback_t uart_callback, void *ctx, uint32_t priority)
+{
+    if(interrupt_mode == UART_SEND)
+    {
+        g_uart_instance[channel].uart_send_instance.callback = uart_callback;
+        g_uart_instance[channel].uart_send_instance.ctx = ctx;
+        uart[channel]->IER |= 0x2;
+    } else if(interrupt_mode == UART_RECEIVE)
+    {
+        g_uart_instance[channel].uart_receive_instance.callback = uart_callback;
+        g_uart_instance[channel].uart_receive_instance.ctx = ctx;
+        uart[channel]->IER |= 0x1;
+    }
+    g_uart_instance[channel].uart_num = channel;
+    plic_set_priority(IRQN_UART1_INTERRUPT + channel, priority);
+    plic_irq_register(IRQN_UART1_INTERRUPT + channel, uart_irq_callback, &g_uart_instance[channel]);
+    plic_irq_enable(IRQN_UART1_INTERRUPT + channel);
+}*/
+
 void signal_register(void)
 {
   uart_irq_register(s_uart_debug_channel, UART_RECEIVE, signal_action, NULL, 1);
@@ -145,12 +164,12 @@ static void print_version (void) {
   lua_writeline();
 }
 
-/* bits of various argument indicators in 'args' */
-#define has_error	1	/* bad option */
-#define has_i		2	/* -i */
-#define has_v		4	/* -v */
-#define has_e		8	/* -e */
-#define has_E		16	/* -E */
+// /* bits of various argument indicators in 'args' */
+// #define has_error	1	/* bad option */
+// #define has_i		2	/* -i */
+// #define has_v		4	/* -v */
+// #define has_e		8	/* -e */
+// #define has_E		16	/* -E */
 
 /*
 ** {==================================================================
@@ -254,31 +273,44 @@ int l_read_lines(lua_State *L, char *b, const char *p)
     if(debug_port->LSR & 1)
     {
         ch = (char)(debug_port->RBR & 0xff);
-        lch = ch;
         if(ch == 0x03)
-          break;
-        b[line_count] = ch;
-        line_count++;
+        {
+          continue;
+        }
         if(line_count >= (LUA_MAXINPUT-1))
           break;
         if(ch == '\r')
+        {
+          lch = ch;
           break;
+        }
         if(ch == '\n')
-          break;
+        {
+          if((line_count != 0) || (lch != '\r'))
+          {
+            lch = ch;
+            break;
+          }
+        }
+        lch = ch;
+        b[line_count] = ch;
+        line_count++;
         while(debug_port->LSR & (1u << 5))
           continue;
         debug_port->THR = ch;
     }
   }
-  if((line_count == 1) && (ch == '\n') && (lch == '\r'))
-    return 0;
   while(debug_port->LSR & (1u << 5))
     continue;
   debug_port->THR = '\r';
   while(debug_port->LSR & (1u << 5))
-    continue;
+   continue;
   debug_port->THR = '\n';
-  b[line_count] = 0;
+  if(line_count == 0)
+  {
+    b[0] = '\n';
+    return 1;
+  }
   return line_count;
 }
 
@@ -309,11 +341,10 @@ static int pushline (lua_State *L, int firstline) {
   size_t l;
   int i,j;
   const char *prmt = get_prompt(L, firstline);
-  int readstatus = l_read_lines(L, b, prmt);//lua_readline(L, b, prmt);
-  if (readstatus == 0)
+  l = l_read_lines(L, b, prmt);//lua_readline(L, b, prmt);
+  if (l == 0)
     return 0;  /* no input (prompt will be popped by caller) */
   lua_pop(L, 1);  /* remove prompt */
-  l = strlen(b);
   j=0;
   for(i=0;i<l;i++)
   {
@@ -328,8 +359,6 @@ static int pushline (lua_State *L, int firstline) {
     }
   }b[l-j]=0;
   l-=j;
-  if (l > 0 && b[l-1] == '\n')  /* line ends with newline? */
-    b[--l] = '\0';  /* remove it */
   if (firstline && b[0] == '=')  /* for compatibility with 5.2, ... */
     lua_pushfstring(L, "return %s", b + 1);  /* change '=' to 'return' */
   else
@@ -370,7 +399,7 @@ static int multiline (lua_State *L) {
       lua_saveline(L, line);  /* keep history */
       return status;  /* cannot or should not try to add continuation line */
     }
-    lua_pushliteral(L, "\r\n");  /* add newline... */
+    lua_pushliteral(L, "\n");  /* add newline... */
     lua_insert(L, -2);  /* ...between the two lines */
     lua_concat(L, 3);  /* join them */
   }
