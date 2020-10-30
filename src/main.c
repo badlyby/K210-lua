@@ -179,6 +179,7 @@ static int lua_into_spe(lua_State *L)
     running_spe = 1;
     int i,len;
     uint8_t ch = 0;
+    fflush(stdin);
     uart_irq_register(UART_DEVICE_3, UART_RECEIVE, spe_get_bytes, NULL, 1);
     while(running_spe)
     {

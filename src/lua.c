@@ -62,25 +62,6 @@ int signal_action(void *ctx)
   return 0;
 }
 
-/*void uart_irq_register(uart_device_number_t channel, uart_interrupt_mode_t interrupt_mode, plic_irq_callback_t uart_callback, void *ctx, uint32_t priority)
-{
-    if(interrupt_mode == UART_SEND)
-    {
-        g_uart_instance[channel].uart_send_instance.callback = uart_callback;
-        g_uart_instance[channel].uart_send_instance.ctx = ctx;
-        uart[channel]->IER |= 0x2;
-    } else if(interrupt_mode == UART_RECEIVE)
-    {
-        g_uart_instance[channel].uart_receive_instance.callback = uart_callback;
-        g_uart_instance[channel].uart_receive_instance.ctx = ctx;
-        uart[channel]->IER |= 0x1;
-    }
-    g_uart_instance[channel].uart_num = channel;
-    plic_set_priority(IRQN_UART1_INTERRUPT + channel, priority);
-    plic_irq_register(IRQN_UART1_INTERRUPT + channel, uart_irq_callback, &g_uart_instance[channel]);
-    plic_irq_enable(IRQN_UART1_INTERRUPT + channel);
-}*/
-
 void signal_register(void)
 {
   uart_irq_register(s_uart_debug_channel, UART_RECEIVE, signal_action, NULL, 1);
