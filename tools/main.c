@@ -8,6 +8,7 @@
 #include <termios.h>
 #include "usart.h"
 #include "SPE_NL.h"
+#include "ff.h"
 
 #define SPE_CMD_NOP 0
 #define SPE_CMD_OFW 1 //open file for write
@@ -25,9 +26,10 @@
 
 static int fusart = -1;
 volatile int SPE_ACK = 0;
+volatile int SPE_RETURN = 0;
 void SPE_CallBack(uint8_t *data, uint32_t length)
 {
-	uint8_t cmd =data[0];
+	uint8_t cmd = data[0];
 	uint16_t *v16;
 	uint32_t *v32;
 	uint64_t *v64;
@@ -35,19 +37,22 @@ void SPE_CallBack(uint8_t *data, uint32_t length)
 	switch(cmd)
 	{
 	case SPE_RETURN_U8:
-		printf("Return U8 %d\n", data[1]);
+		//printf("Return U8 %d\n", data[1]);
+		SPE_RETURN = data[1];
 		break;
 	case SPE_RETURN_U16:
 		v16 = (uint16_t *)(data+1);
-		printf("Return U16 %d\n", *v16);
+		//printf("Return U16 %d\n", *v16);
+		SPE_RETURN = *v16;
 		break;
 	case SPE_RETURN_U32:
 		v32 = (uint32_t *)(data+1);
-		printf("Return U32 %d\n", *v32);
+		//printf("Return U32 %d\n", *v32);
+		SPE_RETURN = *v32;
 		break;
 	case SPE_RETURN_U64:
 		v64 = (uint64_t *)(data+1);
-		printf("Return U64 %ld\n", (unsigned long)*v64);
+		//printf("Return U64 %ld\n", (unsigned long)*v64);
 		break;
 	}
 }
@@ -71,46 +76,127 @@ int find_name(char *path)
 
 int main(int argc, char *argv[])
 {
-	int i,rlen,len,timeout = 500;
+	int i,rlen,len,try,timeout = 500;
 	uint8_t buf[9000];
 	char *filename = NULL;
+	char path[256];
 	FILE *fp = NULL;
-	if(argc != 3)
+	if((argc != 3) && (argc != 4))
 	{
-		printf("%s serialport filename\n", argv[0]);
+		printf("%s serialport filename [path in spifs]\n", argv[0]);
 		return -1;
 	}
 	printf("Open %s.\n",argv[1]);
-	i = find_name(argv[2]);
-	if(i>0) filename = argv[2]+i;
-	else filename = argv[2];
-	printf("File %s\n",filename);
+	if(argc == 4)
+	{
+		filename = argv[3];
+		i = find_name(argv[3]);
+		if(1>0)
+		{
+			memcpy(path, argv[3], i);
+			path[i-1] = 0;
+			printf("path:%s\n",path);
+		}else{
+			path[0] = 0;
+		}
+	}
+	else
+	{
+		i = find_name(argv[2]);
+		if(i>0) filename = argv[2]+i;
+		else filename = argv[2];
+	}
+	printf("File %s -> %s\n",argv[2],filename);
 	fusart = set_usart(argv[1], 115200, 8, 1, 'N');
 	if(-1 == fusart)
 	{
 		printf("Can't open serial port %s\n",argv[1]);
 		return -2;
 	}
+	setDTR(fusart, 1);
+	setRTS(fusart, 1);
+	tcflush(fusart, TCIOFLUSH);
+	buf[0] = '\n';
+	buf[1] = '\n';
+	write(fusart, buf, 2);
+	usleep(10*1000);
+	len = read(fusart,buf,256);
+	if(len >= 0) buf[len] = 0;
+	if((len < 1) ||(strstr((char *)buf,">") == NULL))
+	{
+		buf[0] = 0x03;
+		write(fusart, buf, 1);
+		usleep(100*1000);
+		len = read(fusart,buf,256);
+		if(len <= 0)
+		{
+			printf("Can't into REPL\n");
+			usart_close(fusart);
+			return -3;
+		}
+		buf[len] = 0;
+		if(strstr((char *)buf, "interrupted!") == NULL)
+		{
+			printf("Can't into REPL\n");
+			usart_close(fusart);
+			return -3;
+		}
+	}
 	fp = fopen(argv[2], "rb");
 	if(fp == NULL)
 	{
 		printf("Can't open file %s\n",argv[2]);
 		usart_close(fusart);
-		return -3;
+		return -4;
 	}
-	setDTR(fusart, 1);
-	setRTS(fusart, 1);
-	sprintf((char *)buf, "into_spe()\n");
-	write(fusart, buf, strlen((char *)buf));
-	usleep(10*1000);
-	len = read(fusart,buf,256);
-	if(len < 256)
+	if(path[0])
 	{
-		buf[len] = 0;
-		printf("%s\n",buf);
+		sprintf((char *)buf, "os.mkdir(\"%s\")\n",path);
+		write(fusart, buf, strlen((char *)buf));
+		usleep(100*1000);
+		len = read(fusart,buf,256);
+		if(len < 256)
+		{
+			buf[len] = 0;
+			printf("%s\n",buf);
+		}
+	}
+	try=3;
+	do {
+		sprintf((char *)buf, "into_spe()\n");
+		SPE_ACK = 0;
+		write(fusart, buf, strlen((char *)buf));
+		timeout = 5000;
+		while(SPE_ACK == 0)
+		{
+			len = read(fusart,buf,9000);
+			for(i=0;i<len;i++)
+			{
+				SPE_Receive_Byte(buf[i]);
+			}
+			usleep(1000);
+			if(timeout)
+				timeout--;
+			else
+				break;
+		}
+		if(try)
+			try--;
+		else
+			break;
+	} while(SPE_ACK == 0);
+	if(SPE_ACK == 0)
+	{
+		printf("Can't into spe.\n");
+		fclose(fp);
+		usart_close(fusart);
+		return -5;
 	}
 	buf[0] = SPE_CMD_OFW;
-	sprintf((char *)(buf+1),"0:/%s",filename);
+	if((filename[0] == '0') && (filename[1] == ':'))
+		sprintf((char *)(buf+1),"%s",filename);
+	else
+		sprintf((char *)(buf+1),"0:/%s",filename);
 	SPE_ACK = 0;
 	SPE_Send_Packet(buf, strlen((char *)buf));
 	timeout = 5000;
@@ -127,7 +213,19 @@ int main(int argc, char *argv[])
 		else
 			break;
 	}
-
+	if((SPE_ACK == 0) || (SPE_RETURN != FR_OK))
+	{
+		if(SPE_ACK == 0)
+			printf("Create file timeout\n");
+		else
+			printf("Create file error:%d\n",SPE_RETURN);
+		fclose(fp);
+		buf[0] = SPE_CMD_EXIT;
+		SPE_Send_Packet(buf, 1);
+		usleep(100*1000);
+		usart_close(fusart);
+		return -6;
+	}
 	buf[0] = SPE_CMD_WF;
 	do {
 		rlen = fread(buf+1, 1, 8192, fp);
@@ -148,6 +246,11 @@ int main(int argc, char *argv[])
 				timeout--;
 			else
 				break;
+		}
+		if(SPE_RETURN != FR_OK)
+		{
+			printf("Write file error!\n");
+			break;
 		}
 	}while(rlen == 8192);
 	fclose(fp);
@@ -177,13 +280,13 @@ int main(int argc, char *argv[])
 	/*usleep(100*1000);
 	sprintf(buf, "dofile(\"0:/test.lua\")\n");
 	write(fusart, buf, strlen(buf));*/
-	/*usleep(100*1000);
+	usleep(100*1000);
 	len = read(fusart,buf,256);
 	if(len < 256)
 	{
 		buf[len] = 0;
 		printf("%s\n",buf);
-	}*/
+	}
 	usart_close(fusart);
 	return 0;
 }

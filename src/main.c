@@ -180,7 +180,11 @@ static int lua_into_spe(lua_State *L)
     int i,len;
     uint8_t ch = 0;
     fflush(stdin);
+    fflush(stdout);
     uart_irq_register(UART_DEVICE_3, UART_RECEIVE, spe_get_bytes, NULL, 1);
+    spe_retbuf[0] = SPE_RETURN_U8;
+    spe_retbuf[1] = 0;
+    SPE_Send_Packet(spe_retbuf, 2);
     while(running_spe)
     {
         len = FIFO_getSize(&spe_fifo);
@@ -190,6 +194,7 @@ static int lua_into_spe(lua_State *L)
             SPE_Receive_Byte(ch);
         }
     }
+    printf("Leaving spe.\r\n");
     return 0;
 }
 
