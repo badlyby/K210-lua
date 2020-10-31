@@ -421,17 +421,6 @@ static int os_mkdir (lua_State *L) {
   return 0;
 }
 
-static int os_rm (lua_State *L) {
-  FRESULT status;
-  if(lua_gettop(L) == 1)
-  {
-    status = f_unlink(luaL_checkstring(L, 1));
-    lua_pushinteger(L, status);
-    return 1;
-  }
-  return 0;
-}
-
 static int os_exit (lua_State *L) {
   int status;
   if (lua_isboolean(L, 1))
@@ -459,7 +448,6 @@ static const luaL_Reg syslib[] = {
   {"tmpname",   os_tmpname},
   {"listdir",   os_listdir},
   {"mkdir",   os_mkdir},
-  {"rm",   os_rm},
   {NULL, NULL}
 };
 
