@@ -143,7 +143,7 @@ static int fs_init(void)
     if(status == FR_NO_FILESYSTEM)
     {
         buf = malloc(64*1024);
-        status = f_mkfs(_T("0:"), FM_ANY, 0, buf, 4096);
+        status = f_mkfs(_T("0:"), FM_ANY, 0, buf, 64*1024);
         free(buf);
         if(status == FR_OK)
         {

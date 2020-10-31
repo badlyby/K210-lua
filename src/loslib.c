@@ -9,7 +9,6 @@
 
 #include "lprefix.h"
 
-
 #include <errno.h>
 #include <locale.h>
 #include <stdlib.h>
@@ -20,7 +19,6 @@
 
 #include "lauxlib.h"
 #include "lualib.h"
-
 
 /*
 ** {==================================================================
@@ -52,7 +50,6 @@
 #endif					/* } */
 /* }================================================================== */
 
-
 /*
 ** {==================================================================
 ** Configuration for time-related stuff
@@ -76,7 +73,6 @@
 
 #endif				/* } */
 
-
 #if !defined(l_gmtime)		/* { */
 /*
 ** By default, Lua uses gmtime/localtime, except when POSIX is available,
@@ -99,7 +95,6 @@
 #endif				/* } */
 
 /* }================================================================== */
-
 
 /*
 ** {==================================================================
@@ -137,8 +132,6 @@
 #endif				/* } */
 /* }================================================================== */
 
-
-
 static int os_execute (lua_State *L) {
   const char *cmd = luaL_optstring(L, 1, NULL);
   int stat;
@@ -152,19 +145,16 @@ static int os_execute (lua_State *L) {
   }
 }
 
-
 static int os_remove (lua_State *L) {
   const char *filename = luaL_checkstring(L, 1);
   return luaL_fileresult(L, f_unlink(filename) == 0, filename);
 }
-
 
 static int os_rename (lua_State *L) {
   const char *fromname = luaL_checkstring(L, 1);
   const char *toname = luaL_checkstring(L, 2);
   return luaL_fileresult(L, f_rename(fromname, toname) == 0, NULL);
 }
-
 
 static int os_tmpname (lua_State *L) {
   char buff[LUA_TMPNAMBUFSIZE];
@@ -176,18 +166,15 @@ static int os_tmpname (lua_State *L) {
   return 1;
 }
 
-
 static int os_getenv (lua_State *L) {
   lua_pushstring(L, getenv(luaL_checkstring(L, 1)));  /* if NULL push nil */
   return 1;
 }
 
-
 static int os_clock (lua_State *L) {
   lua_pushnumber(L, ((lua_Number)clock())/(lua_Number)CLOCKS_PER_SEC);
   return 1;
 }
-
 
 /*
 ** {======================================================
@@ -215,14 +202,12 @@ static void setfield (lua_State *L, const char *key, int value, int delta) {
   lua_setfield(L, -2, key);
 }
 
-
 static void setboolfield (lua_State *L, const char *key, int value) {
   if (value < 0)  /* undefined? */
     return;  /* does not set field */
   lua_pushboolean(L, value);
   lua_setfield(L, -2, key);
 }
-
 
 /*
 ** Set all fields from structure 'tm' in the table on top of the stack
@@ -239,14 +224,12 @@ static void setallfields (lua_State *L, struct tm *stm) {
   setboolfield(L, "isdst", stm->tm_isdst);
 }
 
-
 static int getboolfield (lua_State *L, const char *key) {
   int res;
   res = (lua_getfield(L, -1, key) == LUA_TNIL) ? -1 : lua_toboolean(L, -1);
   lua_pop(L, 1);
   return res;
 }
-
 
 static int getfield (lua_State *L, const char *key, int d, int delta) {
   int isnum;
@@ -270,7 +253,6 @@ static int getfield (lua_State *L, const char *key, int d, int delta) {
   return (int)res;
 }
 
-
 static const char *checkoption (lua_State *L, const char *conv,
                                 ptrdiff_t convlen, char *buff) {
   const char *option = LUA_STRFTIMEOPTIONS;
@@ -289,17 +271,14 @@ static const char *checkoption (lua_State *L, const char *conv,
   return conv;  /* to avoid warnings */
 }
 
-
 static time_t l_checktime (lua_State *L, int arg) {
   l_timet t = l_gettime(L, arg);
   luaL_argcheck(L, (time_t)t == t, arg, "time out-of-bounds");
   return (time_t)t;
 }
 
-
 /* maximum size for an individual 'strftime' item */
 #define SIZETIMEFMT	250
-
 
 static int os_date (lua_State *L) {
   size_t slen;
@@ -342,7 +321,6 @@ static int os_date (lua_State *L) {
   return 1;
 }
 
-
 static int os_time (lua_State *L) {
   time_t t;
   if (lua_isnoneornil(L, 1))  /* called without args? */
@@ -368,7 +346,6 @@ static int os_time (lua_State *L) {
   return 1;
 }
 
-
 static int os_difftime (lua_State *L) {
   time_t t1 = l_checktime(L, 1);
   time_t t2 = l_checktime(L, 2);
@@ -377,7 +354,6 @@ static int os_difftime (lua_State *L) {
 }
 
 /* }====================================================== */
-
 
 static int os_setlocale (lua_State *L) {
   static const int cat[] = {LC_ALL, LC_COLLATE, LC_CTYPE, LC_MONETARY,
@@ -421,6 +397,25 @@ static int os_mkdir (lua_State *L) {
   return 0;
 }
 
+static int os_mkfs (lua_State *L)
+{
+  int ret = 0;
+  BYTE *buf;
+  FRESULT status;
+  if(lua_gettop(L) > 0)
+  {
+    buf = malloc(64*1024);
+    if(lua_gettop(L) == 2)
+      status = f_mkfs(_T(luaL_checkstring(L, 1)), luaL_checkinteger(L, 2), 0, buf, 64*1024);
+    else
+      status = f_mkfs(_T(luaL_checkstring(L, 1)), FM_ANY, 0, buf, 64*1024);
+    lua_pushinteger(L, status);
+    ret++;
+    free(buf);
+  }
+  return ret;
+}
+
 static int os_exit (lua_State *L) {
   int status;
   if (lua_isboolean(L, 1))
@@ -448,15 +443,13 @@ static const luaL_Reg syslib[] = {
   {"tmpname",   os_tmpname},
   {"listdir",   os_listdir},
   {"mkdir",   os_mkdir},
+  {"mkfs",   os_mkfs},
   {NULL, NULL}
 };
 
 /* }====================================================== */
 
-
-
 LUAMOD_API int luaopen_os (lua_State *L) {
   luaL_newlib(L, syslib);
   return 1;
 }
-
