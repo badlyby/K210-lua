@@ -390,6 +390,47 @@ static int os_setlocale (lua_State *L) {
   return 1;
 }
 
+static int os_listdir (lua_State *L) {
+  int ret = 0;
+  DIR dj;
+  FILINFO fno;
+  FRESULT status;
+  if(lua_gettop(L) == 1)
+    status = f_findfirst(&dj, &fno, _T(luaL_checkstring(L, 1)), _T("*"));
+  else
+    status = f_findfirst(&dj, &fno, _T("0:"), _T("*"));
+  while(status == FR_OK && fno.fname[0])
+  {
+    //if(fno.fattrib & AM_DIR)
+    lua_pushstring(L, fno.fname);
+    ret++;
+    status = f_findnext(&dj, &fno);
+  }
+  f_closedir(&dj);
+  return ret;
+}
+
+static int os_mkdir (lua_State *L) {
+  FRESULT status;
+  if(lua_gettop(L) == 1)
+  {
+    status = f_mkdir(luaL_checkstring(L, 1));
+    lua_pushinteger(L, status);
+    return 1;
+  }
+  return 0;
+}
+
+static int os_rm (lua_State *L) {
+  FRESULT status;
+  if(lua_gettop(L) == 1)
+  {
+    status = f_unlink(luaL_checkstring(L, 1));
+    lua_pushinteger(L, status);
+    return 1;
+  }
+  return 0;
+}
 
 static int os_exit (lua_State *L) {
   int status;
@@ -416,6 +457,9 @@ static const luaL_Reg syslib[] = {
   {"setlocale", os_setlocale},
   {"time",      os_time},
   {"tmpname",   os_tmpname},
+  {"listdir",   os_listdir},
+  {"mkdir",   os_mkdir},
+  {"rm",   os_rm},
   {NULL, NULL}
 };
 
