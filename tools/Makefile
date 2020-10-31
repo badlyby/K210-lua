@@ -1,3 +1,3 @@
-all: test
-test: test.c
-	gcc -o test test.c usart.c ../src/SPE_DLL.c ../src/SPE_NL.c -I./ -I../include
+all: fsend
+fsend: main.c
+	gcc -o fsend main.c usart.c ../src/SPE_DLL.c ../src/SPE_NL.c -I./ -I../include

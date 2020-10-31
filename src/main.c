@@ -258,6 +258,7 @@ void SPE_CallBack(uint8_t *data, uint32_t length)
 void SendBytes(uint8_t *bytes, uint32_t length)
 {
     fwrite(bytes, 1, length, stdout);
+    fflush(stdout);
 }
 
 void SPE_CRCError(uint16_t s,uint16_t d)
