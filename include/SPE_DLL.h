@@ -29,7 +29,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifdef SPE_RAMLessMode
 	void SendByte(uint8_t byte); //串口发送一个字节
 #else
-	#define SPE_MAX_SendPacketLength	48	//最大发送数据包大小
+	#define SPE_MAX_SendPacketLength	9000	//最大发送数据包大小
 	void SendBytes(uint8_t *bytes, uint32_t length); //串口发送多个字节
 #endif
 	void SPE_ProcessData(uint8_t *data, uint32_t length); //接收到数据处理，需要在其他代码中实现

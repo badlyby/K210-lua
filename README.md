@@ -15,6 +15,7 @@ Sipeed MAIX Dock
 √ spifs
 √ gpio/gpiohs
 √ UART
+√ SPI
 
 demo:
  main.lua

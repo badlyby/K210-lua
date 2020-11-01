@@ -130,7 +130,7 @@ void SPE_End_Send(void)//数据包结束
 **********************************************************************/
 uint8_t SPE_Receive_Byte(uint8_t byte)//串口接收一个字节调用一次本函数
 {
-	static volatile uint32_t i,rcount = 0;
+	static volatile uint32_t rcount = 0;
 	static volatile uint8_t rbits = 0;
 	static volatile uint8_t frame_start = 0;
 	uint8_t hit = 0;

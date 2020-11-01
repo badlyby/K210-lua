@@ -81,6 +81,7 @@ int main(int argc, char *argv[])
 	char *filename = NULL;
 	char path[256];
 	FILE *fp = NULL;
+	path[0] = 0;
 	if((argc != 3) && (argc != 4))
 	{
 		printf("%s serialport filename [path in spifs]\n", argv[0]);
@@ -96,8 +97,6 @@ int main(int argc, char *argv[])
 			memcpy(path, argv[3], i);
 			path[i-1] = 0;
 			printf("path:%s\n",path);
-		}else{
-			path[0] = 0;
 		}
 	}
 	else
@@ -119,12 +118,14 @@ int main(int argc, char *argv[])
 	buf[0] = '\n';
 	buf[1] = '\n';
 	write(fusart, buf, 2);
-	usleep(10*1000);
+	usleep(100*1000);
 	len = read(fusart,buf,256);
 	if(len >= 0) buf[len] = 0;
 	if((len < 1) ||(strstr((char *)buf,">") == NULL))
 	{
+		printf("Not in REPL.\n");
 		buf[0] = 0x03;
+		tcflush(fusart, TCIOFLUSH);
 		write(fusart, buf, 1);
 		usleep(100*1000);
 		len = read(fusart,buf,256);
@@ -141,6 +142,7 @@ int main(int argc, char *argv[])
 			usart_close(fusart);
 			return -3;
 		}
+		printf("interrupted!\n");
 	}
 	fp = fopen(argv[2], "rb");
 	if(fp == NULL)
@@ -151,11 +153,13 @@ int main(int argc, char *argv[])
 	}
 	if(path[0])
 	{
+		printf("mkdir %s\n", path);
 		sprintf((char *)buf, "os.mkdir(\"%s\")\n",path);
+		tcflush(fusart, TCIOFLUSH);
 		write(fusart, buf, strlen((char *)buf));
 		usleep(100*1000);
 		len = read(fusart,buf,256);
-		if(len < 256)
+		if((len >= 0) && (len < 256))
 		{
 			buf[len] = 0;
 			printf("%s\n",buf);
@@ -165,14 +169,19 @@ int main(int argc, char *argv[])
 	do {
 		sprintf((char *)buf, "into_spe()\n");
 		SPE_ACK = 0;
+		tcflush(fusart, TCIOFLUSH);
 		write(fusart, buf, strlen((char *)buf));
+		//usleep(100*1000);
 		timeout = 5000;
 		while(SPE_ACK == 0)
 		{
 			len = read(fusart,buf,9000);
-			for(i=0;i<len;i++)
+			if(len > 0)
 			{
-				SPE_Receive_Byte(buf[i]);
+				for(i=0;i<len;i++)
+				{
+					SPE_Receive_Byte(buf[i]);
+				}
 			}
 			usleep(1000);
 			if(timeout)
@@ -198,14 +207,18 @@ int main(int argc, char *argv[])
 	else
 		sprintf((char *)(buf+1),"0:/%s",filename);
 	SPE_ACK = 0;
+	tcflush(fusart, TCIOFLUSH);
 	SPE_Send_Packet(buf, strlen((char *)buf));
 	timeout = 5000;
 	while(SPE_ACK == 0)
 	{
 		len = read(fusart,buf,9000);
-		for(i=0;i<len;i++)
+		if(len > 0)
 		{
-			SPE_Receive_Byte(buf[i]);
+			for(i=0;i<len;i++)
+			{
+				SPE_Receive_Byte(buf[i]);
+			}
 		}
 		usleep(1000);
 		if(timeout)
@@ -221,25 +234,31 @@ int main(int argc, char *argv[])
 			printf("Create file error:%d\n",SPE_RETURN);
 		fclose(fp);
 		buf[0] = SPE_CMD_EXIT;
+		tcflush(fusart, TCIOFLUSH);
 		SPE_Send_Packet(buf, 1);
 		usleep(100*1000);
 		usart_close(fusart);
 		return -6;
 	}
+	//usleep(100*1000);
 	buf[0] = SPE_CMD_WF;
 	do {
 		rlen = fread(buf+1, 1, 8192, fp);
 		if(rlen <= 0)
 			break;
 		SPE_ACK = 0;
+		tcflush(fusart, TCIOFLUSH);
 		SPE_Send_Packet(buf, rlen+1);
 		timeout = 5000;
 		while(SPE_ACK == 0)
 		{
 			len = read(fusart,buf,9000);
-			for(i=0;i<len;i++)
+			if(len > 0)
 			{
-				SPE_Receive_Byte(buf[i]);
+				for(i=0;i<len;i++)
+				{
+					SPE_Receive_Byte(buf[i]);
+				}
 			}
 			usleep(1000);
 			if(timeout)
@@ -247,23 +266,28 @@ int main(int argc, char *argv[])
 			else
 				break;
 		}
-		if(SPE_RETURN != FR_OK)
+		if((SPE_ACK == 0) || (SPE_RETURN != FR_OK))
 		{
 			printf("Write file error!\n");
 			break;
 		}
 	}while(rlen == 8192);
 	fclose(fp);
+	//usleep(100*1000);
 	buf[0] = SPE_CMD_CF;
 	SPE_ACK = 0;
+	tcflush(fusart, TCIOFLUSH);
 	SPE_Send_Packet(buf, 1);
 	timeout = 5000;
 	while(SPE_ACK == 0)
 	{
 		len = read(fusart,buf,9000);
-		for(i=0;i<len;i++)
+		if(len > 0)
 		{
-			SPE_Receive_Byte(buf[i]);
+			for(i=0;i<len;i++)
+			{
+				SPE_Receive_Byte(buf[i]);
+			}
 		}
 		usleep(1000);
 		if(timeout)
@@ -271,18 +295,19 @@ int main(int argc, char *argv[])
 		else
 			break;
 	}
-
+	usleep(100*1000);
 	/*buf[0] = SPE_CMD_DF;
 	sprintf(buf+1,"0:/%s", filename);
 	SPE_Send_Packet(buf, strlen(buf));*/
 	buf[0] = SPE_CMD_EXIT;
+	tcflush(fusart, TCIOFLUSH);
 	SPE_Send_Packet(buf, 1);
 	/*usleep(100*1000);
 	sprintf(buf, "dofile(\"0:/test.lua\")\n");
 	write(fusart, buf, strlen(buf));*/
 	usleep(100*1000);
 	len = read(fusart,buf,256);
-	if(len < 256)
+	if((len >= 0) && (len < 256))
 	{
 		buf[len] = 0;
 		printf("%s\n",buf);
