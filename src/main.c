@@ -273,6 +273,18 @@ void SPE_CRCError(uint16_t s,uint16_t d)
     SPE_Send_Packet(spe_retbuf, 1);
 }
 
+static int lua_read_cycle(lua_State *L)
+{
+    lua_pushinteger(L, read_cycle());
+    return 1;
+}
+
+static int lua_cpu_freq(lua_State *L)
+{
+    lua_pushinteger(L, sysctl_clock_get_freq(SYSCTL_CLOCK_CPU));
+    return 1;
+}
+
 int main()
 {
     FIFO_Init(&spe_fifo, spe_fifo_buf);
@@ -301,6 +313,8 @@ int main()
     lua_register(L, "msleep", lua_msleep);
     lua_register(L, "sleep", lua_sleep);
     lua_register(L, "sys_reset", lua_sys_reset);
+    lua_register(L, "read_cycle", lua_read_cycle);
+    lua_register(L, "cpu_freq", lua_cpu_freq);
     lua_register(L, "current_coreid", lua_current_coreid);
     lua_register(L, "do_core1", lua_do_core1);
     lua_register(L, "core1_busy", lua_core1_busy);

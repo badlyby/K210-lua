@@ -535,7 +535,8 @@ static int g_write (lua_State *L, FIL *f, int arg) {
     else {
       size_t l;
       const char *s = luaL_checklstring(L, arg, &l);
-      status = status && (f_write(f,s, l, &bw) == l);
+      f_write(f,s, l, &bw);
+      status = status && (bw == l);
     }
   }
   if (status) return 1;  /* file handle already on stack top */
