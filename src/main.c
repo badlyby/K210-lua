@@ -46,6 +46,7 @@ LUAMOD_API int luaopen_gpio (lua_State *L);
 LUAMOD_API int luaopen_uart (lua_State *L);
 LUAMOD_API int luaopen_spi (lua_State *L);
 LUAMOD_API int luaopen_lcd (lua_State *L);
+LUAMOD_API int luaopen_image (lua_State *L);
 int dofile (lua_State *L, const char *name);
 void into_main(lua_State *L);
 static lua_State *L, *L1;
@@ -327,6 +328,7 @@ int main()
     luaL_requiref(L, "uart",luaopen_uart, 1);
     luaL_requiref(L, "spi",luaopen_spi, 1);
     luaL_requiref(L, "lcd",luaopen_lcd, 1);
+    luaL_requiref(L, "image",luaopen_image, 1);
     lua_register(L, "usleep", lua_usleep);
     lua_register(L, "msleep", lua_msleep);
     lua_register(L, "sleep", lua_sleep);
