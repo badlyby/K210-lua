@@ -233,9 +233,41 @@ static int lua_lcd_rgb565 (lua_State *L) {
     return 0;
 }
 
-static int lua_lcd_draw_buf (lua_State *L) {
+static int lua_lcd_display (lua_State *L) {
     int x, y, width, height;
     const uint32_t *ptr = NULL;
+    if(lua_gettop(L) == 1)
+    {
+        x = 0;
+        y = 0;
+        width = lcd_get_width();
+        height = lcd_get_height();
+        ptr = lua_topointer(L, 1);
+        if(ptr != NULL)
+        {
+            lua_lock();
+            sysctl_set_spi0_dvp_data(1);
+            fpioa_set_function(39, FUNC_SPI0_SCLK);
+            lcd_draw_buf(x, y, width, height, ptr);
+            lua_unlock();
+        }
+    }
+    if(lua_gettop(L) == 3)
+    {
+        x = luaL_checkinteger(L, 1);
+        y = luaL_checkinteger(L, 2);
+        width = lcd_get_width() - x;
+        height = lcd_get_height() - y;
+        ptr = lua_topointer(L, 3);
+        if(ptr != NULL)
+        {
+            lua_lock();
+            sysctl_set_spi0_dvp_data(1);
+            fpioa_set_function(39, FUNC_SPI0_SCLK);
+            lcd_draw_buf(x, y, width, height, ptr);
+            lua_unlock();
+        }
+    }
     if(lua_gettop(L) == 5)
     {
         x = luaL_checkinteger(L, 1);
@@ -270,7 +302,7 @@ static const luaL_Reg lcdlib[] = {
     {"set_offset", lua_lcd_set_offset},
     {"get_width", lua_lcd_get_width},
     {"get_height", lua_lcd_get_height},
-    {"draw_buf", lua_lcd_draw_buf},
+    {"display", lua_lcd_display},
     {"rgb565", lua_lcd_rgb565},
     {NULL, NULL}
 };
