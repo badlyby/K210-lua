@@ -7,7 +7,9 @@ extern "C" {
 
 #include "stdint.h"
 #ifndef SPI_DEVICE_INDEX
-#define SPI_DEVICE_INDEX SPI_DEVICE_0
+#define SPI_DEVICE_INDEX SPI_DEVICE_1
+#define SPI_DEVICE_SS 3
+#define SDCARD_SELECT 31
 #endif
 /** 
   * @brief  Card Specific Data: CSD Register   

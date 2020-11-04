@@ -15,9 +15,11 @@
 #include "lauxlib.h"
 #include "lstate.h"
 #include "w25qxx.h"
+#include "sdcard.h"
 #include "SPE_NL.h"
 #include "wzl-fifo.h"
 #include <uart.h>
+#include "lcd.h"
 
 #define SPE_CMD_NOP 0
 #define SPE_CMD_OFW 1 //open file for write
@@ -285,23 +287,39 @@ static int lua_cpu_freq(lua_State *L)
     return 1;
 }
 
+void fpioa_config(void)
+{
+    fpioa_init();
+    //sdcard
+    fpioa_set_function(28, FUNC_SPI1_D0);
+    fpioa_set_function(26, FUNC_SPI1_D1);
+    fpioa_set_function(27, FUNC_SPI1_SCLK);
+    fpioa_set_function(29, FUNC_GPIOHS0 + SDCARD_SELECT);
+    fpioa_set_function(25, FUNC_SPI1_SS0 + SPI_DEVICE_SS);
+    //lcd
+    fpioa_set_function(37, FUNC_GPIOHS0 + RST_GPIONUM);
+    fpioa_set_function(38, FUNC_GPIOHS0 + DCX_GPIONUM);
+    fpioa_set_function(36, FUNC_SPI0_SS0 + LCD_SPI_SLAVE_SELECT);
+    fpioa_set_function(39, FUNC_SPI0_SCLK);
+}
+
 int main()
 {
     FIFO_Init(&spe_fifo, spe_fifo_buf);
     sysctl_cpu_set_freq(200000000UL);
+    dmac_init();
     plic_init();
     sysctl_enable_irq();
-    fpioa_init();
-    fpioa_set_function(28, FUNC_SPI0_D0);
-    fpioa_set_function(26, FUNC_SPI0_D1);
-    fpioa_set_function(27, FUNC_SPI0_SCLK);
-    fpioa_set_function(29, FUNC_GPIOHS31);
-    fpioa_set_function(25, FUNC_SPI0_SS3);
+    fpioa_config();
     printf("CPU Freq %d\n", sysctl_cpu_get_freq());
     if(fs_init())
     {
         printf("FAT32 err\n");
     }
+    lcd_init(1500000,true, 0, 0, 0, 0, 0, 96, 320,240);
+    lcd_set_direction(96);
+    lcd_clear(GREEN);
+    lcd_fill_rectangle(50,50,100,100,RED);
     make_main_lua();
     L = luaL_newstate();  /* create state */
     luaL_openlibs(L);
