@@ -1,0 +1,6 @@
+lcd.init()
+lcd.clear(lcd.rgb565(255,255,255))
+lcd.draw_string(10,10,"Hello world!",lcd.rgb565(0,0,0))
+lcd.fill_rectangle(50,50,100,100,lcd.rgb565(255,0,0))
+lcd.fill_rectangle(100,50,150,100,lcd.rgb565(0,255,0))
+lcd.fill_rectangle(150,50,200,100,lcd.rgb565(0,0,255))

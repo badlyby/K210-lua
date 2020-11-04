@@ -11,6 +11,8 @@
 #include "sdcard.h"
 #include "w25qxx.h"
 #include <stdio.h>
+#include <sysctl.h>
+#include <fpioa.h>
 
 #define FLASH_OFF_SET_ADDRESS   (8*1024*1024)
 #define FLASH_SPIFS_SIZE (w25qxx_FLASH_CHIP_SIZE - FLASH_OFF_SET_ADDRESS)
@@ -58,6 +60,8 @@ DSTATUS disk_initialize(BYTE pdrv)
         return 0;
         break;
     case 1:
+        sysctl_set_spi0_dvp_data(0);
+        fpioa_set_function(27, FUNC_SPI0_SCLK);
         if(sd_init() == 0)
         {printf("sd ready\n");
             sdcard_ready = 1;
@@ -89,6 +93,8 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, DWORD sector, UINT count)
         }
         break;
     case 1:
+        sysctl_set_spi0_dvp_data(0);
+        fpioa_set_function(27, FUNC_SPI0_SCLK);
         if(sd_read_sector_dma(buff, sector, count) == 0)
             return RES_OK;
     }
@@ -116,6 +122,8 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, DWORD sector, UINT count)
         }
         break;
     case 1:
+        sysctl_set_spi0_dvp_data(0);
+        fpioa_set_function(27, FUNC_SPI0_SCLK);
         if(sd_write_sector_dma((BYTE *)buff, sector, count) == 0)
             return RES_OK;
     }

@@ -45,6 +45,7 @@ LUAMOD_API int luaopen_fpioa (lua_State *L);
 LUAMOD_API int luaopen_gpio (lua_State *L);
 LUAMOD_API int luaopen_uart (lua_State *L);
 LUAMOD_API int luaopen_spi (lua_State *L);
+LUAMOD_API int luaopen_lcd (lua_State *L);
 int dofile (lua_State *L, const char *name);
 void into_main(lua_State *L);
 static lua_State *L, *L1;
@@ -291,11 +292,11 @@ void fpioa_config(void)
 {
     fpioa_init();
     //sdcard
-    fpioa_set_function(28, FUNC_SPI1_D0);
-    fpioa_set_function(26, FUNC_SPI1_D1);
-    fpioa_set_function(27, FUNC_SPI1_SCLK);
+    fpioa_set_function(28, FUNC_SPI0_D0);
+    fpioa_set_function(26, FUNC_SPI0_D1);
+    fpioa_set_function(27, FUNC_SPI0_SCLK);
     fpioa_set_function(29, FUNC_GPIOHS0 + SDCARD_SELECT);
-    fpioa_set_function(25, FUNC_SPI1_SS0 + SPI_DEVICE_SS);
+    fpioa_set_function(25, FUNC_SPI0_SS0 + SPI_DEVICE_SS);
     //lcd
     fpioa_set_function(37, FUNC_GPIOHS0 + RST_GPIONUM);
     fpioa_set_function(38, FUNC_GPIOHS0 + DCX_GPIONUM);
@@ -307,19 +308,17 @@ int main()
 {
     FIFO_Init(&spe_fifo, spe_fifo_buf);
     sysctl_cpu_set_freq(200000000UL);
-    dmac_init();
+    sysctl_set_power_mode(SYSCTL_POWER_BANK6, SYSCTL_POWER_V18);
+	sysctl_set_power_mode(SYSCTL_POWER_BANK7, SYSCTL_POWER_V18);
     plic_init();
     sysctl_enable_irq();
+    dmac_init();
     fpioa_config();
     printf("CPU Freq %d\n", sysctl_cpu_get_freq());
     if(fs_init())
     {
         printf("FAT32 err\n");
     }
-    lcd_init(1500000,true, 0, 0, 0, 0, 0, 96, 320,240);
-    lcd_set_direction(96);
-    lcd_clear(GREEN);
-    lcd_fill_rectangle(50,50,100,100,RED);
     make_main_lua();
     L = luaL_newstate();  /* create state */
     luaL_openlibs(L);
@@ -327,6 +326,7 @@ int main()
     luaL_requiref(L, "gpio",luaopen_gpio, 1);
     luaL_requiref(L, "uart",luaopen_uart, 1);
     luaL_requiref(L, "spi",luaopen_spi, 1);
+    luaL_requiref(L, "lcd",luaopen_lcd, 1);
     lua_register(L, "usleep", lua_usleep);
     lua_register(L, "msleep", lua_msleep);
     lua_register(L, "sleep", lua_sleep);

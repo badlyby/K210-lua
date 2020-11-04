@@ -17,6 +17,7 @@ Sipeed MAIX Dock
 √ gpio/gpiohs
 √ UART
 √ SPI
+√ LCD
 
 demo:
- main.lua
+ main.lua (sdcard)
