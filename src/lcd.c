@@ -392,6 +392,15 @@ void lcd_draw_rectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint
 
 void lcd_draw_buf(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const uint32_t *ptr)
 {
+    int i,len;
     lcd_set_area(x, y, x + width - 1, y + height - 1);
-    tft_write_word((uint32_t*)ptr, width * height / 2);
+    len = width * height;
+    if(len > (g_lcd_w * g_lcd_h))
+        len = g_lcd_w * g_lcd_h;
+    for(i=0;i<len/2;i++)
+    {
+        g_lcd_display_buff[i*2] = ((uint16_t *)ptr)[i*2+1];
+        g_lcd_display_buff[i*2+1] = ((uint16_t *)ptr)[i*2];
+    }
+    tft_write_word((uint32_t*)g_lcd_display_buff, len / 2);
 }

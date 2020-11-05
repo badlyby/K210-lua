@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include "lstate.h"
 #include "lcd.h"
+#include "lua_image.h"
 
 static int lua_lcd_init (lua_State *L) {
     int width = 320, height = 240, dir = DIR_YX_LRUD, freq = 15000000, offset_w = 0, offset_h = 0, offset_w1 = 0, offset_h1 = 0;
@@ -236,13 +237,24 @@ static int lua_lcd_rgb565 (lua_State *L) {
 static int lua_lcd_display (lua_State *L) {
     int x, y, width, height;
     const uint32_t *ptr = NULL;
+    struct_image *img = NULL;
     if(lua_gettop(L) == 1)
     {
         x = 0;
         y = 0;
-        width = lcd_get_width();
-        height = lcd_get_height();
-        ptr = lua_topointer(L, 1);
+        img = luaL_checkudata(L, 1, LUA_IMAGEHANDLE);
+        if(img == NULL)
+        {
+            width = lcd_get_width();
+            height = lcd_get_height();
+            ptr = lua_topointer(L, 1);
+        }
+        else
+        {
+            width = img->width;
+            height = img->height;
+            ptr = img->buf;
+        }
         if(ptr != NULL)
         {
             lua_lock();
@@ -256,9 +268,19 @@ static int lua_lcd_display (lua_State *L) {
     {
         x = luaL_checkinteger(L, 1);
         y = luaL_checkinteger(L, 2);
-        width = lcd_get_width() - x;
-        height = lcd_get_height() - y;
-        ptr = lua_topointer(L, 3);
+        img = luaL_checkudata(L, 3, LUA_IMAGEHANDLE);
+        if(img == NULL)
+        {
+            width = lcd_get_width() - x;
+            height = lcd_get_height() - y;
+            ptr = lua_topointer(L, 3);
+        }
+        else
+        {
+            width = img->width;
+            height = img->height;
+            ptr = img->buf;
+        }
         if(ptr != NULL)
         {
             lua_lock();

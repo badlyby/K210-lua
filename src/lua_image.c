@@ -1,20 +1,6 @@
-#include "lua.h"
-#include "lauxlib.h"
-#include "lualib.h"
 #include <stdlib.h>
-#include <fpioa.h>
-#include <uart.h>
-#include "lstate.h"
-
-#define LUA_IMAGEHANDLE	"IMAGEHANDLE"
-
-typedef struct {
-    int width;
-    int height;
-    uint32_t *buf;
-} struct_image;
-
-#define image_buf(L)	((struct_image *)luaL_checkudata(L, 1, LUA_IMAGEHANDLE))
+#include "loadbmp.h"
+#include "lua_image.h"
 
 static struct_image *newbuf (lua_State *L)
 {
@@ -69,6 +55,37 @@ static int lua_image_getbuf (lua_State *L) {
     return 1;
 }
 
+static int lua_image_loadbmp (lua_State *L) {
+    struct_image *img = image_buf(L);
+    uint32_t width,height;
+    if(lua_gettop(L) == 2)
+    {
+        const char *name = luaL_checkstring(L, 2);
+        if(read_bmp_size(name, &width, &height) == 0)
+        {
+            new_size(img, width, height);
+            loadbmp(name, (uint16_t *)img->buf);
+        }
+    }
+    return 0;
+}
+
+static int lua_init_loadbmp (lua_State *L) {
+    struct_image *img = NULL;
+    uint32_t width,height;
+    if(lua_gettop(L) == 1)
+    {
+        const char *name = luaL_checkstring(L, 1);
+        img = newbuf(L);
+        if(read_bmp_size(name, &width, &height) == 0)
+        {
+            new_size(img, width, height);
+            loadbmp(name, (uint16_t *)img->buf);
+        }
+    }
+    return 1;
+}
+
 static int image_gc (lua_State *L) {
     struct_image *img = image_buf(L);
     if(img->buf != NULL)
@@ -89,12 +106,14 @@ static int image_tostring (lua_State *L) {
 
 static const luaL_Reg imagelib[] = {
     {"init", lua_image_init},
+    {"loadbmp", lua_init_loadbmp},
     {NULL, NULL}
 };
 
 
 static const luaL_Reg meth[] = {
     {"getbuf", lua_image_getbuf},
+    {"loadbmp", lua_image_loadbmp},
     {NULL, NULL}
 };
 
