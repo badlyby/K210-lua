@@ -47,6 +47,7 @@ LUAMOD_API int luaopen_uart (lua_State *L);
 LUAMOD_API int luaopen_spi (lua_State *L);
 LUAMOD_API int luaopen_lcd (lua_State *L);
 LUAMOD_API int luaopen_image (lua_State *L);
+LUAMOD_API int luaopen_i2c (lua_State *L);
 int dofile (lua_State *L, const char *name);
 void into_main(lua_State *L);
 static lua_State *L, *L1;
@@ -304,7 +305,36 @@ void fpioa_config(void)
     fpioa_set_function(36, FUNC_SPI0_SS0 + LCD_SPI_SLAVE_SELECT);
     fpioa_set_function(39, FUNC_SPI0_SCLK);
 }
-
+#include "i2c.h"
+int test_i2c()
+{
+    int i,total = 0;
+    uint8_t rb;
+    fpioa_set_function(44, FUNC_GPIOHS1);
+    fpioa_set_function(42, FUNC_GPIOHS2);
+    fpioa_set_function(40, FUNC_I2C0_SDA);
+    fpioa_set_function(41, FUNC_I2C0_SCLK);
+    gpiohs_set_drive_mode(1, GPIO_DM_OUTPUT);
+    gpiohs_set_drive_mode(2, GPIO_DM_OUTPUT);
+    printf("test i2c\n");
+    gpiohs_set_pin(1, GPIO_PV_HIGH);
+    msleep(100);
+    gpiohs_set_pin(1, GPIO_PV_LOW);
+    msleep(100);
+    gpiohs_set_pin(2, GPIO_PV_HIGH);
+    msleep(100);
+    gpiohs_set_pin(2, GPIO_PV_LOW);
+    msleep(100);
+    for(i=0x08;i<0x78;i++)
+    {
+        i2c_init(0, i, 7, 100000);
+        if(i2c_recv_data(0, NULL, 0, &rb, 1) == 0)
+        {
+            printf("Found %02X\n",i);
+            total++;
+        }
+    }
+}
 int main()
 {
     FIFO_Init(&spe_fifo, spe_fifo_buf);
@@ -320,6 +350,7 @@ int main()
     {
         printf("FAT32 err\n");
     }
+    test_i2c();
     make_main_lua();
     L = luaL_newstate();  /* create state */
     luaL_openlibs(L);
@@ -327,6 +358,7 @@ int main()
     luaL_requiref(L, "gpio",luaopen_gpio, 1);
     luaL_requiref(L, "uart",luaopen_uart, 1);
     luaL_requiref(L, "spi",luaopen_spi, 1);
+    luaL_requiref(L, "i2c",luaopen_i2c, 1);
     luaL_requiref(L, "lcd",luaopen_lcd, 1);
     luaL_requiref(L, "image",luaopen_image, 1);
     lua_register(L, "usleep", lua_usleep);

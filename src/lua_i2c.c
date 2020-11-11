@@ -34,6 +34,7 @@ static uint32_t on_transmit0()
         lua_settop(lua_i2c_dev[0].L, 0);
         lua_pushfunction(lua_i2c_dev[0].L, lua_i2c_dev[0].on_transmit);
         if(lua_pcall(lua_i2c_dev[0].L, 0, 0, 0)) lua_error(lua_i2c_dev[0].L);
+        else ret = luaL_checkinteger(lua_i2c_dev[0].L, -1);
     }
     return ret;
 }
@@ -66,6 +67,7 @@ static uint32_t on_transmit1()
         lua_settop(lua_i2c_dev[1].L, 0);
         lua_pushfunction(lua_i2c_dev[1].L, lua_i2c_dev[1].on_transmit);
         if(lua_pcall(lua_i2c_dev[1].L, 0, 0, 0)) lua_error(lua_i2c_dev[1].L);
+        else ret = luaL_checkinteger(lua_i2c_dev[0].L, -1);
     }
     return ret;
 }
@@ -134,10 +136,10 @@ static int lua_i2c_init (lua_State *L) {
         i2c->num = luaL_checkinteger(L, 1);
         if(lua_gettop(L) >= 2) i2c->clk = luaL_checkinteger(L, 2);
         else i2c->clk = 100000;
-        if(lua_gettop(L) >= 3) i2c->addr_wid = luaL_checkinteger(L, 3);
-        else i2c->addr_wid = 7;
-        if(lua_gettop(L) >= 4) i2c->addr = luaL_checkinteger(L, 4);
+         if(lua_gettop(L) >= 3) i2c->addr = luaL_checkinteger(L, 3);
         else i2c->addr = 0;
+        if(lua_gettop(L) >= 4) i2c->addr_wid = luaL_checkinteger(L, 4);
+        else i2c->addr_wid = 7;
         i2c_init(i2c->num, i2c->addr, i2c->addr_wid, i2c->clk);
         return 1;
     }
@@ -176,12 +178,47 @@ static int lua_i2c_recv (lua_State *L) {
         }
         luaL_buffinit(L, &b);
         rx_buff = (uint8_t *)luaL_prepbuffsize(&b, rx_len);  /* prepare buffer to read whole block */
-        i2c_recv_data(i2c->num, (const uint8_t *)cmd_buff, cmd_len, rx_buff, rx_len);
+        if(i2c_recv_data(i2c->num, (const uint8_t *)cmd_buff, cmd_len, rx_buff, rx_len)) rx_len = 0;
         luaL_addsize(&b, rx_len);
         luaL_pushresult(&b);  /* close buffer */
         return (rx_len > 0);
     }
     return 0;
+}
+
+static int lua_i2c_scan (lua_State *L) {
+    struct_i2c *i2c = i2c_dev(L);
+    int i,index = 0,total = 0;
+    uint8_t rb;
+    luaL_Buffer b;
+    luaL_buffinit(L, &b);
+    char *p = luaL_prepbuffer(&b);
+    for(i=0x08;i<0x78;i++)
+    {
+        i2c_init(i2c->num, i, i2c->addr_wid, i2c->clk);
+        if(i2c_recv_data(i2c->num, NULL, 0, &rb, 1) == 0)
+        {
+            printf("Found %02X\n",i);
+            index++;
+            total++;
+            *p++ = i;
+            if(index >= LUAL_BUFFERSIZE)
+            {
+                luaL_addsize(&b, LUAL_BUFFERSIZE);
+                p = luaL_prepbuffer(&b);
+                index = 0;
+            }
+        }
+    }
+    luaL_addsize(&b, index);
+    luaL_pushresult(&b);  /* close buffer */
+    if(total == 0)
+    {
+        lua_pop(L, 1);  /* remove last result */
+        luaL_pushfail(L);  /* push nil instead */
+    }
+    i2c_init(i2c->num, i2c->addr, i2c->addr_wid, i2c->clk);
+    return 1;
 }
 
 static int lua_i2c_set_addr(lua_State *L) {
@@ -247,6 +284,7 @@ static const luaL_Reg meth[] = {
     {"set_addr", lua_i2c_set_addr},
     {"send", lua_i2c_send},
     {"recv", lua_i2c_recv},
+    {"scan", lua_i2c_scan},
     {NULL, NULL}
 };
 
