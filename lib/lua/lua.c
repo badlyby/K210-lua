@@ -164,7 +164,7 @@ static void print_version (void) {
 #endif
 
 #if !defined(LUA_MAXINPUT)
-#define LUA_MAXINPUT		512
+  #define LUA_MAXINPUT		512
 #endif
 
 

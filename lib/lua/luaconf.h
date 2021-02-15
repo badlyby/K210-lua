@@ -768,9 +768,8 @@
 ** without modifying the main part of the file.
 */
 
-
-
-
+// TODO: avoid this trick by trying to handle string lines concat
+#define LUA_MAXINPUT		2048
 
 #endif
 
